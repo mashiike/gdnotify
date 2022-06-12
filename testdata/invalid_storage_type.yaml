@@ -1,0 +1,12 @@
+required_version: ">=0.0.0"
+
+storage:
+  type: Hoge
+
+notification:
+  type: EventBridge
+  event_bus: default
+
+drives:
+  - drive_id: __default__
+  - drive_id: 0XXXXXXXXXXXXXXXXXX
