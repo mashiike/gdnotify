@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _RunModeName = "automaticwebhookchannel_maintenancecleanup"
+const _RunModeName = "cliwebhookmaintainer"
 
-var _RunModeIndex = [...]uint8{0, 9, 16, 35, 42}
+var _RunModeIndex = [...]uint8{0, 3, 10, 20}
 
-const _RunModeLowerName = "automaticwebhookchannel_maintenancecleanup"
+const _RunModeLowerName = "cliwebhookmaintainer"
 
 func (i RunMode) String() string {
 	if i < 0 || i >= RunMode(len(_RunModeIndex)-1) {
@@ -24,30 +24,26 @@ func (i RunMode) String() string {
 // Re-run the stringer command to generate them again.
 func _RunModeNoOp() {
 	var x [1]struct{}
-	_ = x[RunModeAutomatic-(0)]
+	_ = x[RunModeCLI-(0)]
 	_ = x[RunModeWebhook-(1)]
-	_ = x[RunModeChannelMaintenance-(2)]
-	_ = x[RunModeCleanup-(3)]
+	_ = x[RunModeMaintainer-(2)]
 }
 
-var _RunModeValues = []RunMode{RunModeAutomatic, RunModeWebhook, RunModeChannelMaintenance, RunModeCleanup}
+var _RunModeValues = []RunMode{RunModeCLI, RunModeWebhook, RunModeMaintainer}
 
 var _RunModeNameToValueMap = map[string]RunMode{
-	_RunModeName[0:9]:        RunModeAutomatic,
-	_RunModeLowerName[0:9]:   RunModeAutomatic,
-	_RunModeName[9:16]:       RunModeWebhook,
-	_RunModeLowerName[9:16]:  RunModeWebhook,
-	_RunModeName[16:35]:      RunModeChannelMaintenance,
-	_RunModeLowerName[16:35]: RunModeChannelMaintenance,
-	_RunModeName[35:42]:      RunModeCleanup,
-	_RunModeLowerName[35:42]: RunModeCleanup,
+	_RunModeName[0:3]:        RunModeCLI,
+	_RunModeLowerName[0:3]:   RunModeCLI,
+	_RunModeName[3:10]:       RunModeWebhook,
+	_RunModeLowerName[3:10]:  RunModeWebhook,
+	_RunModeName[10:20]:      RunModeMaintainer,
+	_RunModeLowerName[10:20]: RunModeMaintainer,
 }
 
 var _RunModeNames = []string{
-	_RunModeName[0:9],
-	_RunModeName[9:16],
-	_RunModeName[16:35],
-	_RunModeName[35:42],
+	_RunModeName[0:3],
+	_RunModeName[3:10],
+	_RunModeName[10:20],
 }
 
 // RunModeString retrieves an enum value from the enum constants string name.

@@ -9,7 +9,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.10
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.15.6
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.16.3
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.23.2
 	github.com/aws/smithy-go v1.11.3
 	github.com/fatih/color v1.13.0
 	github.com/fujiwara/logutils v1.1.0
@@ -23,6 +22,7 @@ require (
 	github.com/mashiike/go-logx v0.0.0
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/najeira/randstr v0.1.1
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/samber/lo v1.21.0
 	github.com/shogo82148/go-retry v1.1.1
 	github.com/stretchr/testify v1.7.2
@@ -52,6 +52,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.9 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/pires/go-proxyproto v0.6.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

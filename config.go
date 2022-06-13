@@ -104,6 +104,9 @@ func (cfg *Config) Restrict() error {
 	if cfg.Expiration == 0 {
 		return errors.New("expiration is required")
 	}
+	if cfg.Webhook == "" {
+		log.Println("[warn] webhook is required, if run_mode is maintainer")
+	}
 	if cfg.Storage == nil {
 		return errors.New("storage does not configured")
 	}

@@ -3,8 +3,10 @@ package gdnotify
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,11 +19,11 @@ import (
 	"github.com/Songmu/flextime"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
-	lambdaapi "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
 	logx "github.com/mashiike/go-logx"
 	"github.com/mattn/go-shellwords"
+	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
@@ -38,22 +40,21 @@ type App struct {
 	cleanupFns      []func() error
 	expiration      time.Duration
 	webhookAddress  string
-	lambdaClient    *lambdaapi.Client
 }
 
 type RunOptions struct {
 	Mode         RunMode
 	LocalAddress string
+	CLICommand   CLICommand
 }
 
 type RunMode int
 
 //go:generate enumer -type=RunMode -trimprefix RunMode -transform=snake -output run_mode_enumer.gen.go
 const (
-	RunModeAutomatic RunMode = iota
+	RunModeCLI RunMode = iota
 	RunModeWebhook
-	RunModeChannelMaintenance
-	RunModeCleanup
+	RunModeMaintainer
 )
 
 func WithRunMode(mode string) func(*RunOptions) error {
@@ -74,9 +75,34 @@ func WithLocalAddress(addr string) func(*RunOptions) error {
 	}
 }
 
+func WithCLICommand(cmd string) func(*RunOptions) error {
+	return func(opts *RunOptions) error {
+		if c, err := CLICommandString(cmd); err != nil {
+			return err
+		} else {
+			opts.CLICommand = c
+		}
+		return nil
+	}
+}
+
+func isLambda() bool {
+	if strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
+		return true
+	}
+	return false
+}
+
+func DefaultRunMode() RunMode {
+	if isLambda() {
+		return RunModeWebhook
+	}
+	return RunModeCLI
+}
+
 func newRunOptions() *RunOptions {
 	return &RunOptions{
-		Mode:         RunModeAutomatic,
+		Mode:         DefaultRunMode(),
 		LocalAddress: ":8080",
 	}
 }
@@ -141,7 +167,6 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 		cleanupFns:      cleanupFns,
 		webhookAddress:  cfg.Webhook,
 		expiration:      cfg.Expiration,
-		lambdaClient:    lambdaapi.NewFromConfig(awsCfg),
 	}
 	return app, nil
 }
@@ -174,21 +199,17 @@ func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) 
 			return err
 		}
 	}
-	if isLambda() {
-		logx.Println(ctx, "[info] run as lambda handler")
-		lambda.StartWithContext(ctx, app.LambdaHandler(opts))
-		return nil
-	}
 	switch opts.Mode {
-	case RunModeAutomatic, RunModeChannelMaintenance:
+	case RunModeWebhook:
+		logx.Println(ctx, "[info] run as webhook server")
+		return app.runAsWebhookServer(ctx, opts)
+	case RunModeMaintainer:
 		logx.Println(ctx, "[info] run as channel maintainer")
 		return app.runAsChannelMaintainer(ctx, opts)
-	case RunModeWebhook:
-		logx.Println(ctx, "[info] run as local webhook server")
-		return app.runAsWebhookServer(ctx, opts)
-	case RunModeCleanup:
-		logx.Println(ctx, "[info] run as local cannel cleanup")
-		return app.cleanupChannels(ctx)
+	case RunModeCLI:
+		logx.Println(ctx, "[info] run as CLI")
+		return app.runAsCLI(ctx, opts)
+		//return app.cleanupChannels(ctx)
 	}
 
 	return errors.New("unknown run mode")
@@ -196,7 +217,7 @@ func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) 
 
 func (app *App) runAsWebhookServer(ctx context.Context, opts *RunOptions) error {
 	var wg sync.WaitGroup
-	if tunnelCmd := os.Getenv("HTTP_TUNNEL"); tunnelCmd != "" {
+	if tunnelCmd := os.Getenv("HTTP_TUNNEL"); !isLambda() && tunnelCmd != "" {
 		logx.Println(ctx, "[info] set HTTP_TUNNEL detected")
 		var rendered string
 		if tmpl, err := template.New("tunnel").Parse(tunnelCmd); err != nil {
@@ -240,11 +261,73 @@ func (app *App) runAsWebhookServer(ctx context.Context, opts *RunOptions) error 
 	return nil
 }
 
-func (app *App) runAsChannelMaintainer(ctx context.Context, opts *RunOptions) error {
-	return app.maintenanceChannels(ctx)
+func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error {
+	if isLambda() {
+		logx.Println(ctx, "[info] run on lambda")
+		lambda.StartWithContext(ctx, func(ctx context.Context, event json.RawMessage) (interface{}, error) {
+			if err := app.maintenanceChannels(ctx, false); err != nil {
+				logx.Println(ctx, "[error] failed maintenance channels: ", err)
+				return nil, err
+			}
+			return map[string]interface{}{
+				"Status": 200,
+			}, nil
+		})
+		return nil
+	}
+	logx.Println(ctx, "[info] run on local")
+	return app.maintenanceChannels(ctx, false)
 }
 
-func (app *App) maintenanceChannels(ctx context.Context) error {
+type CLICommand int
+
+//go:generate enumer -type=CLICommand -trimprefix CLICommand -transform=snake -output cli_command_enumer.gen.go
+const (
+	CLICommandList CLICommand = iota
+	CLICommandServe
+	CLICommandRegister
+	CLICommandMaintenance
+	CLICommandCleanup
+)
+
+func (cmd CLICommand) Description() string {
+	switch cmd {
+	case CLICommandList:
+		return "list notification channels"
+	case CLICommandServe:
+		return "serve webhook server"
+	case CLICommandRegister:
+		return "register a new notification channel for a drive for which a notification channel has not yet been set"
+	case CLICommandMaintenance:
+		return "re-register expired notification channels or register new unregistered channels."
+	case CLICommandCleanup:
+		return "remove all notification channels"
+	default:
+		return ""
+	}
+}
+
+func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
+	if isLambda() {
+		return errors.New("run_mode is CLI, can not run on AWS Lambda")
+	}
+	switch opts.CLICommand {
+	case CLICommandList:
+		return app.listChannels(ctx, os.Stdout)
+	case CLICommandServe:
+		return app.runAsWebhookServer(ctx, opts)
+	case CLICommandRegister:
+		return app.maintenanceChannels(ctx, true)
+	case CLICommandMaintenance:
+		return app.maintenanceChannels(ctx, false)
+	case CLICommandCleanup:
+		return app.cleanupChannels(ctx)
+	default:
+		return fmt.Errorf("unknown cli command `%s`", opts.CLICommand)
+	}
+}
+
+func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
 	if app.webhookAddress == "" {
 		return errors.New("webhook address is empty, plz check configure")
 	}
@@ -405,6 +488,31 @@ func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 		logx.Println(ctx, "[debug] save channel failed", err)
 		return fmt.Errorf("save channel:%w", err)
 	}
+	return nil
+}
+
+func (app *App) listChannels(ctx context.Context, w io.Writer) error {
+	itemsCh, err := app.storage.FindAllChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("find all channels: %w", err)
+	}
+	table := tablewriter.NewWriter(w)
+	table.SetHeader([]string{"Channel ID", "Drive ID", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
+	for items := range itemsCh {
+		for _, item := range items {
+			table.Append([]string{
+				item.ChannelID,
+				item.DriveID,
+				item.PageToken,
+				item.Expiration.Format(time.RFC3339),
+				item.ResourceID,
+				item.PageTokenFetchedAt.Format(time.RFC3339),
+				item.CreatedAt.Format(time.RFC3339),
+				item.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+	}
+	table.Render()
 	return nil
 }
 

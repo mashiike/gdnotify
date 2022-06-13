@@ -29,8 +29,15 @@ func main() {
 
 func _main() error {
 	flag.CommandLine.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "gdnotify [options]")
+		fmt.Fprintln(flag.CommandLine.Output(), "gdnotify -config <config file> [options] [command]")
 		fmt.Fprintln(flag.CommandLine.Output(), "version:", Version)
+		fmt.Fprintln(flag.CommandLine.Output(), "")
+		fmt.Fprintln(flag.CommandLine.Output(), "commands:")
+		for _, cmd := range gdnotify.CLICommandValues() {
+			fmt.Fprintln(flag.CommandLine.Output(), "  ", cmd.String(), "\t", cmd.Description())
+		}
+		fmt.Fprintln(flag.CommandLine.Output(), "")
+		fmt.Fprintln(flag.CommandLine.Output(), "options:")
 		flag.CommandLine.PrintDefaults()
 	}
 	var (
@@ -42,7 +49,7 @@ func _main() error {
 
 	flag.Var(&configs, "config", "config list")
 	flag.IntVar(&port, "port", 0, "webhook httpd port")
-	flag.StringVar(&mode, "mode", gdnotify.RunModeValues()[0].String(), fmt.Sprintf(
+	flag.StringVar(&mode, "run-mode", gdnotify.DefaultRunMode().String(), fmt.Sprintf(
 		"run mode (%s)",
 		strings.Join(gdnotify.RunModeStrings(), "|"),
 	))
@@ -87,6 +94,9 @@ func _main() error {
 	}
 	if mode != "" {
 		optFns = append(optFns, gdnotify.WithRunMode(mode))
+	}
+	if command := flag.Arg(0); command != "" {
+		optFns = append(optFns, gdnotify.WithCLICommand(command))
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	defer cancel()
