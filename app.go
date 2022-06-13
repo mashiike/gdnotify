@@ -481,8 +481,9 @@ func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 		return fmt.Errorf("drive API changes:watch response status not ok (status:%d)", resp.HTTPStatusCode)
 	}
 	item.ResourceID = resp.ResourceId
-	logx.Printf(ctx, "[info] create channel id=%s, resource_id=%s, drive_id=%s page_token=%s, resource_uri=%s",
-		resp.Id, resp.ResourceId, item.DriveID, item.PageToken, resp.ResourceUri,
+	item.Expiration = time.UnixMilli(resp.Expiration)
+	logx.Printf(ctx, "[info] create channel id=%s, resource_id=%s, drive_id=%s page_token=%s, resource_uri=%s, expiration=%s",
+		resp.Id, resp.ResourceId, item.DriveID, item.PageToken, resp.ResourceUri, item.Expiration,
 	)
 	if err := app.storage.SaveChannel(ctx, item); err != nil {
 		logx.Println(ctx, "[debug] save channel failed", err)
