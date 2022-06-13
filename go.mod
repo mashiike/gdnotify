@@ -14,7 +14,7 @@ require (
 	github.com/fujiwara/logutils v1.1.0
 	github.com/fujiwara/ridge v0.6.1
 	github.com/gofrs/flock v0.8.1
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.5.0
 	github.com/kayac/go-config v0.6.0
 	github.com/ken39arg/go-flagx v0.0.0-20220608183922-7cf7c6c0093c
