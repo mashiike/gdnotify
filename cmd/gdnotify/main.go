@@ -63,6 +63,9 @@ func _main() error {
 		Writer:   os.Stdout,
 	}
 	log.SetOutput(filter)
+	if minLevel == "debug" {
+		log.SetFlags(log.Lshortfile)
+	}
 
 	cfg := gdnotify.DefaultConfig()
 	if len(configs) > 0 {

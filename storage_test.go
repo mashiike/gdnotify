@@ -3,13 +3,56 @@ package gdnotify_test
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/Songmu/flextime"
+	"github.com/google/uuid"
 	"github.com/mashiike/gdnotify"
+	"github.com/najeira/randstr"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
+
+func TestConvertChannelItemDynamoDBAttributeValues(t *testing.T) {
+	N := 10
+	items := make([]*gdnotify.ChannelItem, 0, N)
+	rand.Seed(time.Now().Unix())
+	for i := 0; i < N; i++ {
+		uuidObj, _ := uuid.NewRandom()
+
+		items = append(items, &gdnotify.ChannelItem{
+			ChannelID:          uuidObj.String(),
+			DriveID:            randstr.CryptoString(10),
+			PageToken:          fmt.Sprintf("%d", rand.Intn(100)+1),
+			Expiration:         time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+			ResourceID:         randstr.CryptoString(12),
+			PageTokenFetchedAt: time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+			CreatedAt:          time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+			UpdatedAt:          time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+		})
+	}
+	expectedKeys := []string{
+		"ChannelID",
+		"DriveID",
+		"PageToken",
+		"Expiration",
+		"ResourceID",
+		"PageTokenFetchedAt",
+		"CreatedAt",
+		"UpdatedAt",
+	}
+
+	for i, item := range items {
+		t.Run(fmt.Sprintf("item[%d]", i), func(t *testing.T) {
+			t.Logf("%#v", item)
+			values := item.ToDynamoDBAttributeValues()
+			require.ElementsMatch(t, expectedKeys, lo.Keys(values))
+			require.EqualValues(t, item, gdnotify.NewChannelItemWithDynamoDBAttributeValues(values))
+		})
+	}
+}
 
 func TestChannelItemIsAboutToExpired(t *testing.T) {
 

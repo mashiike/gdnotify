@@ -102,7 +102,7 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	}
 
 	cleanupFns := make([]func() error, 0)
-	storage, cleanup, err := NewStorage(ctx, cfg.Storage)
+	storage, cleanup, err := NewStorage(ctx, cfg.Storage, awsCfg)
 	if err != nil {
 		return nil, fmt.Errorf("Create Storage: %w", err)
 	}
@@ -571,6 +571,7 @@ func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Cha
 	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", channelID, item.PageToken, newStartPageToken)
 	newItem := *item
 	newItem.PageToken = newStartPageToken
+	newItem.UpdatedAt = flextime.Now()
 	if err := app.storage.UpdatePageToken(ctx, &newItem); err != nil {
 		return nil, nil, err
 	}
