@@ -59,7 +59,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		coalesce(channelID, "-"),
 		coalesce(resourceID, "-"),
 	)
-	changes, err := app.ChangesList(ctx, channelID)
+	changes, item, err := app.ChangesList(ctx, channelID)
 	if err != nil {
 		logx.Printf(ctx, "[error] get changes list failed channel_id:%s resource_id:%s err:%s",
 			coalesce(channelID, "-"),
@@ -70,15 +70,26 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, http.StatusText(http.StatusInternalServerError))
 		return
 	}
-	if err := app.notification.SendChanges(ctx, changes); err != nil {
-		logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
+	if len(changes) > 0 {
+		logx.Printf(ctx, "[debug] send changes channel_id:%s resource_id:%s",
 			coalesce(channelID, "-"),
 			coalesce(resourceID, "-"),
-			err.Error(),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, http.StatusText(http.StatusInternalServerError))
-		return
+		if err := app.notification.SendChanges(ctx, item, changes); err != nil {
+			logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
+				coalesce(channelID, "-"),
+				coalesce(resourceID, "-"),
+				err.Error(),
+			)
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, http.StatusText(http.StatusInternalServerError))
+			return
+		}
+	} else {
+		logx.Printf(ctx, "[debug] no changes channel_id:%s resource_id:%s",
+			coalesce(channelID, "-"),
+			coalesce(resourceID, "-"),
+		)
 	}
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, http.StatusText(http.StatusOK))

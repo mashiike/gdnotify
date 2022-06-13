@@ -91,6 +91,16 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	}))
 
 	ctx := context.Background()
+
+	awsOpts := make([]func(*config.LoadOptions) error, 0)
+	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
+		awsOpts = append(awsOpts, config.WithRegion(region))
+	}
+	awsCfg, err := config.LoadDefaultConfig(ctx, awsOpts...)
+	if err != nil {
+		return nil, err
+	}
+
 	cleanupFns := make([]func() error, 0)
 	storage, cleanup, err := NewStorage(ctx, cfg.Storage)
 	if err != nil {
@@ -99,7 +109,7 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	if cleanup != nil {
 		cleanupFns = append(cleanupFns, cleanup)
 	}
-	notification, cleanup, err := NewNotification(ctx, cfg.Notification)
+	notification, cleanup, err := NewNotification(ctx, cfg.Notification, awsCfg)
 	if err != nil {
 		return nil, fmt.Errorf("Create Notification: %w", err)
 	}
@@ -119,14 +129,6 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 		return nil, fmt.Errorf("Create Google Drive Service: %w", err)
 	}
 
-	awsOpts := make([]func(*config.LoadOptions) error, 0)
-	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
-		awsOpts = append(awsOpts, config.WithRegion(region))
-	}
-	awsCfg, err := config.LoadDefaultConfig(ctx, awsOpts...)
-	if err != nil {
-		return nil, err
-	}
 	rotateRemaining := time.Duration(0.2 * float64(cfg.Expiration))
 	log.Printf("[debug] cfg.Expiration=%s 20%% rotateRemaining=%s", cfg.Expiration, rotateRemaining)
 
@@ -516,13 +518,13 @@ var changesFields = fmt.Sprintf("changes(%s)", strings.Join(
 	",",
 ))
 
-func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Change, error) {
+func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Change, *ChannelItem, error) {
 	logx.Printf(ctx, "[debug] try FindOneByChannelID  channel id=%s", channelID)
 	item, err := app.storage.FindOneByChannelID(ctx, channelID)
 	logx.Printf(ctx, "[debug] finish FindOneByChannelID  channel id=%s err=%#v", channelID, err)
 	if err != nil {
 		logx.Printf(ctx, "[debug] failed FindOneByChannelID channel_id=%s err=%s", channelID, err.Error())
-		return nil, err
+		return nil, nil, err
 	}
 	logx.Printf(ctx, "[debug] try change list channel id=%s, resource_id=%s, drive_id=%s",
 		item.ChannelID, item.ResourceID, item.DriveID,
@@ -558,19 +560,19 @@ func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Cha
 
 	}
 	if err := process(ctx, item.PageToken); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for nextPageToken != "" {
 		time.Sleep(200 * time.Millisecond)
 		if err := process(ctx, nextPageToken); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", channelID, item.PageToken, newStartPageToken)
 	newItem := *item
 	newItem.PageToken = newStartPageToken
 	if err := app.storage.UpdatePageToken(ctx, &newItem); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return changes, nil
+	return changes, &newItem, nil
 }
