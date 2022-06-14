@@ -151,22 +151,14 @@ func fetchConfigFromHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-var newS3ClientForFetchConfig = func(ctx context.Context) (manager.DownloadAPIClient, error) {
+func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
+	logx.Println(ctx, "[info] fetching from", u)
+
 	awsCfg, err := defaultAWSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return s3.NewFromConfig(awsCfg), nil
-}
-
-func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
-	logx.Println(ctx, "[info] fetching from", u)
-
-	client, err := newS3ClientForFetchConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-	downloader := manager.NewDownloader(client)
+	downloader := manager.NewDownloader(s3.NewFromConfig(awsCfg))
 	var buf manager.WriteAtBuffer
 	downloader.Download(ctx, &buf, &s3.GetObjectInput{
 		Bucket: aws.String(u.Host),
