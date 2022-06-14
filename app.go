@@ -150,6 +150,14 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 			drive.DriveFileScope,
 		),
 	)
+	credentialsBackend, err := NewCredentialsBackend(ctx, cfg.Credentials, awsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("Create Credentials Backend: %w", err)
+	}
+	gcpOpts, err = credentialsBackend.WithCredentialsClientOption(ctx, gcpOpts)
+	if err != nil {
+		return nil, fmt.Errorf("Google Application Credentials Load: %w", err)
+	}
 	driveSvc, err := drive.NewService(ctx, gcpOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("Create Google Drive Service: %w", err)
