@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.10
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.15.6
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.16.3
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.27.2
 	github.com/aws/smithy-go v1.11.3
 	github.com/fatih/color v1.13.0
 	github.com/fujiwara/logutils v1.1.0

@@ -16,13 +16,28 @@ import (
 type Config struct {
 	RequiredVersion string `yaml:"required_version,omitempty"`
 
-	Webhook      string              `yaml:"webhook,omitempty"`
-	Expiration   time.Duration       `yaml:"expiration,omitempty"`
-	Storage      *StorageConfig      `yaml:"storage,omitempty"`
-	Notification *NotificationConfig `yaml:"notification,omitempty"`
-	Drives       []*DriveConfig      `yaml:"drives,omitempty"`
+	Webhook      string                    `yaml:"webhook,omitempty"`
+	Credentials  *CredentialsBackendConfig `yaml:"credentials,omitempty"`
+	Expiration   time.Duration             `yaml:"expiration,omitempty"`
+	Storage      *StorageConfig            `yaml:"storage,omitempty"`
+	Notification *NotificationConfig       `yaml:"notification,omitempty"`
+	Drives       []*DriveConfig            `yaml:"drives,omitempty"`
 
 	versionConstraints gv.Constraints `yaml:"version_constraints,omitempty"`
+}
+
+type CredentialsBackendType int
+
+//go:generate enumer -type=CredentialsBackendType -yaml -trimprefix CredentialsBackendType -output credentials_backend_type_enumer.gen.go
+const (
+	CredentialsBackendTypeNone CredentialsBackendType = iota
+	CredentialsBackendTypeSSMParameterStore
+)
+
+type CredentialsBackendConfig struct {
+	BackendType    CredentialsBackendType `yaml:"backend_type,omitempty"`
+	ParameterName  *string                `yaml:"parameter_name,omitempty"`
+	Base64Encoding bool                   `yaml:"base64encoding,omitempty"`
 }
 
 type StorageType int
@@ -65,6 +80,9 @@ type DriveConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Expiration: 7 * 24 * time.Hour,
+		Credentials: &CredentialsBackendConfig{
+			BackendType: CredentialsBackendTypeNone,
+		},
 		Storage: &StorageConfig{
 			Type:      StorageTypeDynamoDB,
 			TableName: aws.String("gdnotify"),
@@ -107,6 +125,9 @@ func (cfg *Config) Restrict() error {
 	if cfg.Webhook == "" {
 		log.Println("[warn] webhook is required, if run_mode is maintainer")
 	}
+	if cfg.Credentials == nil {
+		return errors.New("credentials does not configured")
+	}
 	if cfg.Storage == nil {
 		return errors.New("storage does not configured")
 	}
@@ -115,6 +136,9 @@ func (cfg *Config) Restrict() error {
 	}
 	if len(cfg.Drives) == 0 {
 		return errors.New("dries does not configured")
+	}
+	if err := cfg.Credentials.Restrict(); err != nil {
+		return fmt.Errorf("credentials:%w", err)
 	}
 	if err := cfg.Storage.Restrict(); err != nil {
 		return fmt.Errorf("storage:%w", err)
@@ -126,6 +150,28 @@ func (cfg *Config) Restrict() error {
 		if err := driveCfg.Restrict(); err != nil {
 			return fmt.Errorf("drives[%d]:%w", i, err)
 		}
+	}
+	return nil
+}
+
+// Restrict restricts a configuration.
+func (cfg *CredentialsBackendConfig) Restrict() error {
+	if !cfg.BackendType.IsACredentialsBackendType() {
+		return errors.New("invalid storage type")
+	}
+	switch cfg.BackendType {
+	case CredentialsBackendTypeNone:
+		return nil
+	case CredentialsBackendTypeSSMParameterStore:
+		return cfg.restrictSSMParameterStore()
+	default:
+		return errors.New("unknown credentials backend type")
+	}
+}
+
+func (cfg *CredentialsBackendConfig) restrictSSMParameterStore() error {
+	if cfg.ParameterName == nil || *cfg.ParameterName == "" {
+		return errors.New("parameter_name is required, if backend_type is SSMParameterStore")
 	}
 	return nil
 }
