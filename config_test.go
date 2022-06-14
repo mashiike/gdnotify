@@ -1,6 +1,7 @@
 package gdnotify_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/mashiike/gdnotify"
@@ -78,7 +79,7 @@ func TestConfigLoadNoError(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			cfg := gdnotify.DefaultConfig()
-			err := cfg.Load(c.paths...)
+			err := cfg.Load(context.Background(), c.paths...)
 			require.NoError(t, err)
 			if c.check != nil {
 				c.check(t, cfg)
@@ -108,7 +109,7 @@ func TestConfigLoadInvalid(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.casename, func(t *testing.T) {
 			cfg := gdnotify.DefaultConfig()
-			err := cfg.Load(c.paths...)
+			err := cfg.Load(context.Background(), c.paths...)
 			require.Error(t, err)
 			if c.expected != "" {
 				require.EqualError(t, err, c.expected)

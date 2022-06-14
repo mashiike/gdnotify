@@ -1,15 +1,22 @@
 package gdnotify
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	gv "github.com/hashicorp/go-version"
 	gc "github.com/kayac/go-config"
+	logx "github.com/mashiike/go-logx"
 )
 
 //Config for App
@@ -100,14 +107,75 @@ func DefaultConfig() *Config {
 }
 
 // Load loads configuration file from file paths.
-func (cfg *Config) Load(paths ...string) error {
-	if len(paths) == 0 {
-		return errors.New("no config")
-	}
-	if err := gc.LoadWithEnv(cfg, paths...); err != nil {
-		return err
+func (cfg *Config) Load(ctx context.Context, paths ...string) error {
+	for _, path := range paths {
+		if err := cfg.load(ctx, path); err != nil {
+			return err
+		}
 	}
 	return cfg.Restrict()
+}
+
+func (cfg *Config) load(ctx context.Context, path string) error {
+	content, err := fetchConfig(ctx, path)
+	if err != nil {
+		return err
+	}
+	return gc.LoadWithEnvBytes(cfg, content)
+}
+
+func fetchConfig(ctx context.Context, path string) ([]byte, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return ioutil.ReadFile(path)
+	}
+	switch u.Scheme {
+	case "http", "https":
+		return fetchConfigFromHTTP(ctx, u)
+	case "s3":
+		return fetchConfigFromS3(ctx, u)
+	case "file", "":
+		return ioutil.ReadFile(u.Path)
+	default:
+		return nil, fmt.Errorf("scheme %s is not supported", u.Scheme)
+	}
+}
+
+func fetchConfigFromHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
+	logx.Println(ctx, "[info] fetching from", u)
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
+var newS3ClientForFetchConfig = func(ctx context.Context) (manager.DownloadAPIClient, error) {
+	awsCfg, err := defaultAWSConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s3.NewFromConfig(awsCfg), nil
+}
+
+func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
+	logx.Println(ctx, "[info] fetching from", u)
+
+	client, err := newS3ClientForFetchConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	downloader := manager.NewDownloader(client)
+	var buf manager.WriteAtBuffer
+	downloader.Download(ctx, &buf, &s3.GetObjectInput{
+		Bucket: aws.String(u.Host),
+		Key:    aws.String(u.Path),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from S3, %s", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // Restrict restricts a configuration.

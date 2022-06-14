@@ -75,10 +75,8 @@ func _main() error {
 	}
 
 	cfg := gdnotify.DefaultConfig()
-	if len(configs) > 0 {
-		if err := cfg.Load(configs...); err != nil {
-			return err
-		}
+	if err := cfg.Load(configs...); err != nil {
+		return err
 	}
 	if err := cfg.ValidateVersion(Version); err != nil {
 		return err
