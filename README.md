@@ -56,10 +56,23 @@ required_version: ">=0.0.0"
 webhook: "{{ env `WEBHOOK_LAMBDA_URL`}}" #webhook mode lambda function URL
 expiration: 168h
 
+# backend setting to get GOOGLE_APPLICATION_CREDENTIALS.
+# Default is None, in which case https://cloud.google.com/docs/authentication/production 
+# If you want to use AWS Secrets Manager, set the backend_type to SSMParameterStore and specify the parameter_name according to the following
+https://docs.aws.amazon.com/systems-manager/latest/userguide/integration-ps-secretsmanager.html
+credentials:
+  backend_type: SSMParameterStore                               
+  parameter_name: /gdnotify/GOOGLE_APPLICATION_CREDENTIALS #SSM Parameter Name
+  base64encoding: false # If the Parameter Store value is base64encoded, set this value to true
+
+# Storage settings for storing the status of notification channels.
+# Default type is DynamoDB
 storage:
   type: DynamoDB
   table_name: gdnotify # DynamoDB Table Name
 
+# Set the recipients to be notified of detected changes
+# Default type is EventBridge
 notification:
   type: EventBridge
   event_bus: gdnotify # Event Bus Name. Although it is possible to use the `default`, it is recommended to create and use a custom event bus.
