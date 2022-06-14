@@ -60,6 +60,19 @@ func TestConfigLoadNoError(t *testing.T) {
 				require.EqualValues(t, "/gdnotify/GOOGLE_APPLICATION_CREDENTIALS", *actual.Credentials.ParameterName)
 			},
 		},
+		{
+			casename: "short",
+			paths:    []string{"testdata/short.yaml"},
+			check: func(t *testing.T, actual *gdnotify.Config) {
+				defaultCfg := gdnotify.DefaultConfig()
+				defaultCfg.Restrict()
+				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
+				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
+				require.ElementsMatch(t, []string{gdnotify.DefaultDriveID, "0XXXXXXXXXXXXXXXXXX"}, lo.Map(actual.Drives, func(cfg *gdnotify.DriveConfig, _ int) string {
+					return cfg.DriveID
+				}))
+			},
+		},
 	}
 
 	for _, c := range cases {

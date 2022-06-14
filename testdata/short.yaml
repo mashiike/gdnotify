@@ -1,0 +1,15 @@
+required_version: ">=0.0.0"
+
+credentials:
+  backend_type: SSMParameterStore
+  parameter_name: /gdnotify/GOOGLE_APPLICATION_CREDENTIALS
+
+storage:
+  table_name: gdnotify
+
+notification:
+  event_bus: default
+
+drives:
+  - drive_id: __default__
+  - drive_id: 0XXXXXXXXXXXXXXXXXX
