@@ -37,7 +37,7 @@ const (
 type CredentialsBackendConfig struct {
 	BackendType    CredentialsBackendType `yaml:"backend_type,omitempty"`
 	ParameterName  *string                `yaml:"parameter_name,omitempty"`
-	Base64Encoding bool                   `yaml:"base64_encoding,omitempty"`
+	Base64Encoding bool                   `yaml:"base64encoding,omitempty"`
 }
 
 type StorageType int

@@ -3,7 +3,9 @@ package gdnotify
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -73,6 +75,11 @@ func (cb *SSMParameterStoreCredentialsBackend) WithCredentialsClientOption(ctx c
 	}
 	if creds == nil {
 		creds = []byte(*output.Parameter.Value)
+	}
+	var temp interface{}
+	if err := json.Unmarshal(creds, &temp); err != nil {
+		logx.Printf(ctx, "[debug] credentials is not json:%s", err.Error())
+		return orig, fmt.Errorf("SSM Parameter `%s` loaded value is not json: %s", cb.name, err.Error())
 	}
 	ret := append(orig, option.WithCredentialsJSON(creds))
 	return ret, nil
