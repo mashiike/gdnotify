@@ -18,6 +18,7 @@ import (
 
 	"github.com/Songmu/flextime"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
@@ -107,6 +108,18 @@ func newRunOptions() *RunOptions {
 	}
 }
 
+func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
+	awsOpts := make([]func(*config.LoadOptions) error, 0)
+	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
+		awsOpts = append(awsOpts, config.WithRegion(region))
+	}
+	awsCfg, err := config.LoadDefaultConfig(ctx, awsOpts...)
+	if err != nil {
+		return *aws.NewConfig(), err
+	}
+	return awsCfg, nil
+}
+
 func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	var drives map[string]*DriveConfig
 	drives = lo.FromEntries(lo.Map(cfg.Drives, func(cfg *DriveConfig, _ int) lo.Entry[string, *DriveConfig] {
@@ -118,11 +131,7 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 
 	ctx := context.Background()
 
-	awsOpts := make([]func(*config.LoadOptions) error, 0)
-	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
-		awsOpts = append(awsOpts, config.WithRegion(region))
-	}
-	awsCfg, err := config.LoadDefaultConfig(ctx, awsOpts...)
+	awsCfg, err := defaultAWSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
