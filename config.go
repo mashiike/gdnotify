@@ -110,7 +110,7 @@ func DefaultConfig() *Config {
 func (cfg *Config) Load(ctx context.Context, paths ...string) error {
 	for _, path := range paths {
 		if err := cfg.load(ctx, path); err != nil {
-			return err
+			return fmt.Errorf("%s load failed: %w", path, err)
 		}
 	}
 	return cfg.Restrict()
@@ -148,6 +148,9 @@ func fetchConfigFromHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Fetch failed: HTTP %s", resp.Status)
+	}
 	return ioutil.ReadAll(resp.Body)
 }
 

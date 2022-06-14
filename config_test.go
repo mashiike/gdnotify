@@ -2,6 +2,8 @@ package gdnotify_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/mashiike/gdnotify"
@@ -89,6 +91,8 @@ func TestConfigLoadNoError(t *testing.T) {
 }
 
 func TestConfigLoadInvalid(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
 	cases := []struct {
 		casename string
 		paths    []string
@@ -103,6 +107,11 @@ func TestConfigLoadInvalid(t *testing.T) {
 			casename: "invalid_storage_type",
 			paths:    []string{"testdata/invalid_notification_type.yaml"},
 			expected: "testdata/invalid_notification_type.yaml load failed: parse failed: Hoge does not belong to NotificationType values",
+		},
+		{
+			casename: "can not load from http",
+			paths:    []string{"testdata/short.yaml", server.URL},
+			expected: server.URL + " load failed: Fetch failed: HTTP 404 Not Found",
 		},
 	}
 
