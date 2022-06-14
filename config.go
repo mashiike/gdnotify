@@ -163,9 +163,10 @@ func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
 	}
 	downloader := manager.NewDownloader(s3.NewFromConfig(awsCfg))
 	var buf manager.WriteAtBuffer
-	downloader.Download(ctx, &buf, &s3.GetObjectInput{
+	logx.Printf(ctx, "[debug] try download Bucket=%s, Key=%s", u.Host, u.Path)
+	_, err = downloader.Download(ctx, &buf, &s3.GetObjectInput{
 		Bucket: aws.String(u.Host),
-		Key:    aws.String(u.Path),
+		Key:    aws.String(strings.TrimLeft(u.Path, "/")),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from S3, %s", err)
