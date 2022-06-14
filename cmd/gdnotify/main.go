@@ -73,9 +73,10 @@ func _main() error {
 	if minLevel == "debug" {
 		log.SetFlags(log.Lshortfile)
 	}
-
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	defer cancel()
 	cfg := gdnotify.DefaultConfig()
-	if err := cfg.Load(configs...); err != nil {
+	if err := cfg.Load(ctx, configs...); err != nil {
 		return err
 	}
 	if err := cfg.ValidateVersion(Version); err != nil {
@@ -96,8 +97,7 @@ func _main() error {
 	if command := flag.Arg(0); command != "" {
 		optFns = append(optFns, gdnotify.WithCLICommand(command))
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	defer cancel()
+
 	if err := app.RunWithContext(ctx, optFns...); err != nil {
 		return err
 	}
