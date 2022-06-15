@@ -49,14 +49,21 @@ func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig, aw
 }
 
 type ChangeEventDetail struct {
-	DetailType string        `json:"-"`
-	Subject    string        `json:"subject"`
-	Actor      *drive.User   `json:"actor"`
-	Change     *drive.Change `json:"change"`
+	Subject string        `json:"subject"`
+	Actor   *drive.User   `json:"actor"`
+	Change  *drive.Change `json:"change"`
 }
 
+const (
+	DetailTypeFileRemoved  = "File Removed"
+	DetailTypeFileTrashed  = "File Move to trash"
+	DetailTypeFileChanged  = "File Changed"
+	DetailTypeDriveRemoved = "Shared Drive Removed"
+	DetailTypeDriveChanged = "Drive Status Changed"
+)
+
 func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
-	switch e.DetailType {
+	switch e.DetailType() {
 	case DetailTypeFileRemoved:
 		e.Subject = fmt.Sprintf("FileID %s was removed at %s", e.Change.FileId, e.Change.Time)
 	case DetailTypeFileTrashed:
@@ -114,54 +121,59 @@ func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
 	return json.Marshal(data)
 }
 
-const (
-	DetailTypeFileRemoved  = "File Removed"
-	DetailTypeFileTrashed  = "File Move to trash"
-	DetailTypeFileChanged  = "File Changed"
-	DetailTypeDriveRemoved = "Shared Drive Removed"
-	DetailTypeDriveChanged = "Drive Status Changed"
-)
+func (e *ChangeEventDetail) DetailType() string {
+	switch e.Change.ChangeType {
+	case "file":
+		switch {
+		case e.Change.Removed:
+			return DetailTypeFileRemoved
+		case e.Change.File != nil && e.Change.File.Trashed:
+			return DetailTypeFileTrashed
+		default:
+			return DetailTypeFileChanged
+		}
+	case "drive":
+		switch {
+		case e.Change.Removed:
+			return DetailTypeDriveRemoved
+		default:
+			return DetailTypeDriveChanged
+		}
+	default:
+		return "Unexpected Changed"
+	}
+}
+func (e *ChangeEventDetail) Source(sourcePrefix string) string {
+	switch e.Change.ChangeType {
+	case "file":
+		return fmt.Sprintf("%s/file/%s", sourcePrefix, e.Change.FileId)
+	case "drive":
+		return fmt.Sprintf("%s/drive/%s", sourcePrefix, e.Change.DriveId)
+	default:
+		return fmt.Sprintf("%s/%s", sourcePrefix, e.Change.ChangeType)
+	}
+}
 
 func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	sourcePrefix := fmt.Sprintf("oss.gdnotify/%s", item.DriveID)
 	entriesChunk := lo.Chunk(lo.Map(changes, func(c *drive.Change, _ int) types.PutEventsRequestEntry {
 
-		var source, detailType string
-		switch c.ChangeType {
-		case "file":
-			source = fmt.Sprintf("%s/file/%s", sourcePrefix, c.FileId)
-			switch {
-			case c.Removed:
-				detailType = DetailTypeFileRemoved
-			case c.File != nil && c.File.Trashed:
-				detailType = DetailTypeFileTrashed
-			default:
-				detailType = DetailTypeFileChanged
-			}
-		case "drive":
-			source = fmt.Sprintf("%s/drive/%s", sourcePrefix, c.DriveId)
-			switch {
-			case c.Removed:
-				detailType = DetailTypeDriveRemoved
-			default:
-				detailType = DetailTypeDriveChanged
-			}
-		default:
-			source = fmt.Sprintf("%s/%s", sourcePrefix, c.ChangeType)
-			detailType = "Unexpected Changed"
-			logx.Printf(ctx, "[warn] unexpected change type `%s`, check Drive API Document", c.ChangeType)
-		}
 		t, err := time.Parse(time.RFC3339Nano, c.Time)
 		if err != nil {
 			logx.Printf(ctx, "[warn] time Parse failed `%s`: %s", c.Time, err.Error())
 			t = flextime.Now()
 		}
-		bs, err := json.Marshal(c)
+		ced := &ChangeEventDetail{
+			Change: c,
+		}
+		bs, err := json.Marshal(ced)
 		if err != nil {
 			logx.Printf(ctx, "[warn] change marshal failed: %s", err.Error())
 			bs = []byte("{}")
 		}
 		detail := string(bs)
+		source := ced.Source(sourcePrefix)
+		detailType := ced.DetailType()
 		logx.Printf(ctx, "[debug] event source=%s, detail-type=%s detail: %s", source, detailType, detail)
 		return types.PutEventsRequestEntry{
 			EventBusName: aws.String(n.eventBus),

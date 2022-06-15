@@ -28,7 +28,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "changed removed",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileRemoved,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -41,7 +40,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "changed file",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileChanged,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -66,7 +64,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "changed file with email",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileChanged,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -92,7 +89,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "changed file no file detail",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileChanged,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -104,7 +100,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "trashed file by unknown user",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileTrashed,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -130,7 +125,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "trashed file",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeFileTrashed,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "file",
@@ -161,7 +155,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "drive removed",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeDriveRemoved,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "drive",
@@ -174,7 +167,6 @@ func TestChangeEventDetailMarshalJSON(t *testing.T) {
 		{
 			name: "drive change",
 			eventDetail: &gdnotify.ChangeEventDetail{
-				DetailType: gdnotify.DetailTypeDriveChanged,
 				Change: &drive.Change{
 					Kind:       "drive#change",
 					ChangeType: "drive",
