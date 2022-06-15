@@ -1,0 +1,10 @@
+{
+  "subject": "",
+  "entity": null,
+  "actor": {
+    "displayName": "Unknown User",
+    "emailAddress": "",
+    "kind": "drive#user"
+  },
+  "change": {}
+}

@@ -48,46 +48,165 @@ func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig, aw
 	return n, nil, nil
 }
 
+type TargetEntity struct {
+	Id          string `json:"id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	CreatedTime string `json:"createdTime"`
+}
+type ChangeEventDetail struct {
+	Subject string        `json:"subject"`
+	Entity  *TargetEntity `json:"entity"`
+	Actor   *drive.User   `json:"actor"`
+	Change  *drive.Change `json:"change"`
+}
+
+const (
+	DetailTypeFileRemoved  = "File Removed"
+	DetailTypeFileTrashed  = "File Move to trash"
+	DetailTypeFileChanged  = "File Changed"
+	DetailTypeDriveRemoved = "Shared Drive Removed"
+	DetailTypeDriveChanged = "Drive Status Changed"
+)
+
+func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
+	switch e.DetailType() {
+	case DetailTypeFileRemoved:
+		e.Subject = fmt.Sprintf("FileID %s was removed at %s", e.Change.FileId, e.Change.Time)
+	case DetailTypeFileTrashed:
+		if e.Change.File != nil {
+			if e.Change.File.TrashingUser != nil {
+				var user string
+				if e.Change.File.TrashingUser.EmailAddress == "" {
+					user = e.Change.File.TrashingUser.DisplayName
+				} else {
+					user = fmt.Sprintf("%s [%s]", e.Change.File.TrashingUser.DisplayName, e.Change.File.TrashingUser.EmailAddress)
+				}
+				e.Subject = fmt.Sprintf("File %s (%s) moved to trash by %s at %s", e.Change.File.Name, e.Change.FileId, user, e.Change.File.TrashedTime)
+				e.Actor = e.Change.File.TrashingUser
+			} else {
+				e.Subject = fmt.Sprintf("File %s (%s) moved to trash at %s", e.Change.File.Name, e.Change.FileId, e.Change.Time)
+			}
+		} else {
+			e.Subject = fmt.Sprintf("FileID %s  moved to trash at %s", e.Change.FileId, e.Change.Time)
+		}
+	case DetailTypeFileChanged:
+		if e.Change.File != nil {
+			if e.Change.File.LastModifyingUser != nil {
+				var user string
+				if e.Change.File.LastModifyingUser.EmailAddress == "" {
+					user = e.Change.File.LastModifyingUser.DisplayName
+				} else {
+					user = fmt.Sprintf("%s [%s]", e.Change.File.LastModifyingUser.DisplayName, e.Change.File.LastModifyingUser.EmailAddress)
+				}
+				e.Subject = fmt.Sprintf("File %s (%s) changed by %s at %s", e.Change.File.Name, e.Change.FileId, user, e.Change.File.ModifiedTime)
+				e.Actor = e.Change.File.LastModifyingUser
+			} else {
+				e.Subject = fmt.Sprintf("File %s (%s) changed at %s", e.Change.File.Name, e.Change.FileId, e.Change.Time)
+			}
+		} else {
+			e.Subject = fmt.Sprintf("FileID %s changed at %s", e.Change.FileId, e.Change.Time)
+		}
+	case DetailTypeDriveRemoved:
+		e.Subject = fmt.Sprintf("DriveId %s was removed at %s", e.Change.DriveId, e.Change.Time)
+	case DetailTypeDriveChanged:
+		if e.Change.Drive != nil {
+			e.Subject = fmt.Sprintf("Drive %s (%s) changed at %s", e.Change.Drive.Name, e.Change.DriveId, e.Change.Time)
+		} else {
+			e.Subject = fmt.Sprintf("DriveId %s changed at %s", e.Change.DriveId, e.Change.Time)
+		}
+	}
+	if e.Actor == nil {
+		e.Actor = &drive.User{
+			Kind:        "drive#user",
+			DisplayName: "Unknown User",
+		}
+	}
+	e.Actor.ForceSendFields = []string{"EmailAddress", "DisplayName", "Kind"}
+	switch {
+	case e.Change.Drive != nil:
+		e.Entity = &TargetEntity{
+			Id:          e.Change.Drive.Id,
+			Kind:        e.Change.Drive.Kind,
+			Name:        e.Change.Drive.Name,
+			CreatedTime: e.Change.Drive.CreatedTime,
+		}
+	case e.Change.File != nil:
+		e.Entity = &TargetEntity{
+			Id:          e.Change.File.Id,
+			Kind:        e.Change.File.Kind,
+			Name:        e.Change.File.Name,
+			CreatedTime: e.Change.File.CreatedTime,
+		}
+	case e.Change.DriveId != "":
+		e.Entity = &TargetEntity{
+			Id:   e.Change.DriveId,
+			Kind: "drive#drive",
+		}
+	case e.Change.FileId != "":
+		e.Entity = &TargetEntity{
+			Id:   e.Change.FileId,
+			Kind: "drive#file",
+		}
+	}
+	type NoMethod ChangeEventDetail
+	data := NoMethod(*e)
+	return json.Marshal(data)
+}
+
+func (e *ChangeEventDetail) DetailType() string {
+	switch e.Change.ChangeType {
+	case "file":
+		switch {
+		case e.Change.Removed:
+			return DetailTypeFileRemoved
+		case e.Change.File != nil && e.Change.File.Trashed:
+			return DetailTypeFileTrashed
+		default:
+			return DetailTypeFileChanged
+		}
+	case "drive":
+		switch {
+		case e.Change.Removed:
+			return DetailTypeDriveRemoved
+		default:
+			return DetailTypeDriveChanged
+		}
+	default:
+		return "Unexpected Changed"
+	}
+}
+func (e *ChangeEventDetail) Source(sourcePrefix string) string {
+	switch e.Change.ChangeType {
+	case "file":
+		return fmt.Sprintf("%s/file/%s", sourcePrefix, e.Change.FileId)
+	case "drive":
+		return fmt.Sprintf("%s/drive/%s", sourcePrefix, e.Change.DriveId)
+	default:
+		return fmt.Sprintf("%s/%s", sourcePrefix, e.Change.ChangeType)
+	}
+}
+
 func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	sourcePrefix := fmt.Sprintf("oss.gdnotify/%s", item.DriveID)
 	entriesChunk := lo.Chunk(lo.Map(changes, func(c *drive.Change, _ int) types.PutEventsRequestEntry {
 
-		var source, detailType string
-		switch c.ChangeType {
-		case "file":
-			source = fmt.Sprintf("%s/file/%s", sourcePrefix, c.FileId)
-			switch {
-			case c.Removed:
-				detailType = "File Removed"
-			case c.File != nil && c.File.Trashed:
-				detailType = "File Move to trash"
-			default:
-				detailType = "File Changed"
-			}
-		case "drive":
-			source = fmt.Sprintf("%s/drive/%s", sourcePrefix, c.DriveId)
-			switch {
-			case c.Removed:
-				detailType = "Shared Drive Removed"
-			default:
-				detailType = "Drive Status Changed"
-			}
-		default:
-			source = fmt.Sprintf("%s/%s", sourcePrefix, c.ChangeType)
-			detailType = "Unexpected Changed"
-			logx.Printf(ctx, "[warn] unexpected change type `%s`, check Drive API Document", c.ChangeType)
-		}
 		t, err := time.Parse(time.RFC3339Nano, c.Time)
 		if err != nil {
 			logx.Printf(ctx, "[warn] time Parse failed `%s`: %s", c.Time, err.Error())
 			t = flextime.Now()
 		}
-		bs, err := json.Marshal(c)
+		ced := &ChangeEventDetail{
+			Change: c,
+		}
+		bs, err := json.Marshal(ced)
 		if err != nil {
 			logx.Printf(ctx, "[warn] change marshal failed: %s", err.Error())
 			bs = []byte("{}")
 		}
 		detail := string(bs)
+		source := ced.Source(sourcePrefix)
+		detailType := ced.DetailType()
 		logx.Printf(ctx, "[debug] event source=%s, detail-type=%s detail: %s", source, detailType, detail)
 		return types.PutEventsRequestEntry{
 			EventBusName: aws.String(n.eventBus),
