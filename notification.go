@@ -118,11 +118,11 @@ func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
 	}
 	if e.Actor == nil {
 		e.Actor = &drive.User{
-			Kind:            "drive#user",
-			DisplayName:     "Unknown User",
-			ForceSendFields: []string{"EmailAddress", "DisplayName", "Kind"},
+			Kind:        "drive#user",
+			DisplayName: "Unknown User",
 		}
 	}
+	e.Actor.ForceSendFields = []string{"EmailAddress", "DisplayName", "Kind"}
 	switch {
 	case e.Change.Drive != nil:
 		e.Entity = &TargetEntity{

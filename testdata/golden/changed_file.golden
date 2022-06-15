@@ -8,6 +8,7 @@
   },
   "actor": {
     "displayName": "hoge",
+    "emailAddress": "",
     "kind": "drive#user"
   },
   "change": {
@@ -17,6 +18,7 @@
       "kind": "drive#file",
       "lastModifyingUser": {
         "displayName": "hoge",
+        "emailAddress": "",
         "kind": "drive#user"
       },
       "mimeType": "application/vnd.google-apps.spreadsheet",

@@ -8,6 +8,7 @@
   },
   "actor": {
     "displayName": "fuga",
+    "emailAddress": "",
     "kind": "drive#user"
   },
   "change": {
@@ -27,6 +28,7 @@
       "trashedTime": "2022-06-15T00:03:52.347Z",
       "trashingUser": {
         "displayName": "fuga",
+        "emailAddress": "",
         "kind": "drive#user"
       },
       "version": "20"
