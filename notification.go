@@ -48,6 +48,80 @@ func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig, aw
 	return n, nil, nil
 }
 
+type ChangeEventDetail struct {
+	DetailType string        `json:"-"`
+	Subject    string        `json:"subject"`
+	Actor      *drive.User   `json:"actor"`
+	Change     *drive.Change `json:"change"`
+}
+
+func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
+	switch e.DetailType {
+	case DetailTypeFileRemoved:
+		e.Subject = fmt.Sprintf("FileID %s was removed at %s", e.Change.FileId, e.Change.Time)
+	case DetailTypeFileTrashed:
+		if e.Change.File != nil {
+			if e.Change.File.TrashingUser != nil {
+				var user string
+				if e.Change.File.TrashingUser.EmailAddress == "" {
+					user = e.Change.File.TrashingUser.DisplayName
+				} else {
+					user = fmt.Sprintf("%s [%s]", e.Change.File.TrashingUser.DisplayName, e.Change.File.TrashingUser.EmailAddress)
+				}
+				e.Subject = fmt.Sprintf("File %s (%s) moved to trash by %s at %s", e.Change.File.Name, e.Change.FileId, user, e.Change.File.TrashedTime)
+				e.Actor = e.Change.File.TrashingUser
+			} else {
+				e.Subject = fmt.Sprintf("File %s (%s) moved to trash at %s", e.Change.File.Name, e.Change.FileId, e.Change.Time)
+			}
+		} else {
+			e.Subject = fmt.Sprintf("FileID %s  moved to trash at %s", e.Change.FileId, e.Change.Time)
+		}
+	case DetailTypeFileChanged:
+		if e.Change.File != nil {
+			if e.Change.File.LastModifyingUser != nil {
+				var user string
+				if e.Change.File.LastModifyingUser.EmailAddress == "" {
+					user = e.Change.File.LastModifyingUser.DisplayName
+				} else {
+					user = fmt.Sprintf("%s [%s]", e.Change.File.LastModifyingUser.DisplayName, e.Change.File.LastModifyingUser.EmailAddress)
+				}
+				e.Subject = fmt.Sprintf("File %s (%s) changed by %s at %s", e.Change.File.Name, e.Change.FileId, user, e.Change.File.ModifiedTime)
+				e.Actor = e.Change.File.LastModifyingUser
+			} else {
+				e.Subject = fmt.Sprintf("File %s (%s) changed at %s", e.Change.File.Name, e.Change.FileId, e.Change.Time)
+			}
+		} else {
+			e.Subject = fmt.Sprintf("FileID %s changed at %s", e.Change.FileId, e.Change.Time)
+		}
+	case DetailTypeDriveRemoved:
+		e.Subject = fmt.Sprintf("DriveId %s was removed at %s", e.Change.DriveId, e.Change.Time)
+	case DetailTypeDriveChanged:
+		if e.Change.Drive != nil {
+			e.Subject = fmt.Sprintf("Drive %s (%s) changed at %s", e.Change.Drive.Name, e.Change.DriveId, e.Change.Time)
+		} else {
+			e.Subject = fmt.Sprintf("DriveId %s changed at %s", e.Change.DriveId, e.Change.Time)
+		}
+	}
+	if e.Actor == nil {
+		e.Actor = &drive.User{
+			Kind:            "drive#user",
+			DisplayName:     "Unknown User",
+			ForceSendFields: []string{"EmailAddress", "DisplayName", "Kind"},
+		}
+	}
+	type NoMethod ChangeEventDetail
+	data := NoMethod(*e)
+	return json.Marshal(data)
+}
+
+const (
+	DetailTypeFileRemoved  = "File Removed"
+	DetailTypeFileTrashed  = "File Move to trash"
+	DetailTypeFileChanged  = "File Changed"
+	DetailTypeDriveRemoved = "Shared Drive Removed"
+	DetailTypeDriveChanged = "Drive Status Changed"
+)
+
 func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	sourcePrefix := fmt.Sprintf("oss.gdnotify/%s", item.DriveID)
 	entriesChunk := lo.Chunk(lo.Map(changes, func(c *drive.Change, _ int) types.PutEventsRequestEntry {
@@ -58,19 +132,19 @@ func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *Channel
 			source = fmt.Sprintf("%s/file/%s", sourcePrefix, c.FileId)
 			switch {
 			case c.Removed:
-				detailType = "File Removed"
+				detailType = DetailTypeFileRemoved
 			case c.File != nil && c.File.Trashed:
-				detailType = "File Move to trash"
+				detailType = DetailTypeFileTrashed
 			default:
-				detailType = "File Changed"
+				detailType = DetailTypeFileChanged
 			}
 		case "drive":
 			source = fmt.Sprintf("%s/drive/%s", sourcePrefix, c.DriveId)
 			switch {
 			case c.Removed:
-				detailType = "Shared Drive Removed"
+				detailType = DetailTypeDriveRemoved
 			default:
-				detailType = "Drive Status Changed"
+				detailType = DetailTypeDriveChanged
 			}
 		default:
 			source = fmt.Sprintf("%s/%s", sourcePrefix, c.ChangeType)

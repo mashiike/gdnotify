@@ -1,0 +1,28 @@
+{
+  "subject": "File gdnotify (XXXXXXXXXX) moved to trash at 2022-06-15T00:03:55.849Z",
+  "actor": {
+    "displayName": "Unknown User",
+    "emailAddress": "",
+    "kind": "drive#user"
+  },
+  "change": {
+    "changeType": "file",
+    "file": {
+      "id": "XXXXXXXXXX",
+      "kind": "drive#file",
+      "lastModifyingUser": {
+        "displayName": "hoge",
+        "kind": "drive#user"
+      },
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "modifiedTime": "2022-06-15T00:03:45.843Z",
+      "name": "gdnotify",
+      "size": "1500",
+      "trashed": true,
+      "version": "20"
+    },
+    "fileId": "XXXXXXXXXX",
+    "kind": "drive#change",
+    "time": "2022-06-15T00:03:55.849Z"
+  }
+}

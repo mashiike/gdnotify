@@ -27,6 +27,7 @@ require (
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/samber/lo v1.21.0
+	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.1.1
 	github.com/stretchr/testify v1.7.2
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
@@ -63,6 +64,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/sergi/go-diff v1.0.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect

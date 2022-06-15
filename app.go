@@ -636,7 +636,7 @@ var driveFields = fmt.Sprintf("drive(%s)", strings.Join(
 	",",
 ))
 var fileFields = fmt.Sprintf("file(%s)", strings.Join(
-	[]string{"id", "name", "kind", "mimeType", "modifiedTime", "lastModifyingUser", "trashed", "trashedTime", "trashingUser", "version", "size", "md5Checksum"},
+	[]string{"id", "name", "driveId", "kind", "mimeType", "modifiedTime", "lastModifyingUser", "trashed", "trashedTime", "trashingUser", "version", "size", "md5Checksum", "createdTime"},
 	",",
 ))
 var changesFields = fmt.Sprintf("changes(%s)", strings.Join(

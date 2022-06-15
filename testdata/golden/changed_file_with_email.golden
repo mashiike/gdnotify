@@ -1,0 +1,28 @@
+{
+  "subject": "File gdnotify (XXXXXXXXXX) changed by hoge [hoge@example.com] at 2022-06-15T00:03:45.843Z",
+  "actor": {
+    "displayName": "hoge",
+    "emailAddress": "hoge@example.com",
+    "kind": "drive#user"
+  },
+  "change": {
+    "changeType": "file",
+    "file": {
+      "id": "XXXXXXXXXX",
+      "kind": "drive#file",
+      "lastModifyingUser": {
+        "displayName": "hoge",
+        "emailAddress": "hoge@example.com",
+        "kind": "drive#user"
+      },
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "modifiedTime": "2022-06-15T00:03:45.843Z",
+      "name": "gdnotify",
+      "size": "1500",
+      "version": "20"
+    },
+    "fileId": "XXXXXXXXXX",
+    "kind": "drive#change",
+    "time": "2022-06-15T00:03:55.849Z"
+  }
+}
