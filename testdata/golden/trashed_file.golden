@@ -1,5 +1,11 @@
 {
   "subject": "File gdnotify (XXXXXXXXXX) moved to trash by fuga at 2022-06-15T00:03:52.347Z",
+  "entity": {
+    "id": "XXXXXXXXXX",
+    "kind": "drive#file",
+    "name": "gdnotify",
+    "createdTime": ""
+  },
   "actor": {
     "displayName": "fuga",
     "kind": "drive#user"

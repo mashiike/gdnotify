@@ -1,5 +1,11 @@
 {
   "subject": "File gdnotify (XXXXXXXXXX) moved to trash at 2022-06-15T00:03:55.849Z",
+  "entity": {
+    "id": "XXXXXXXXXX",
+    "kind": "drive#file",
+    "name": "gdnotify",
+    "createdTime": ""
+  },
   "actor": {
     "displayName": "Unknown User",
     "emailAddress": "",

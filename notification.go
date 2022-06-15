@@ -48,8 +48,15 @@ func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig, aw
 	return n, nil, nil
 }
 
+type TargetEntity struct {
+	Id          string `json:"id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	CreatedTime string `json:"createdTime"`
+}
 type ChangeEventDetail struct {
 	Subject string        `json:"subject"`
+	Entity  *TargetEntity `json:"entity"`
 	Actor   *drive.User   `json:"actor"`
 	Change  *drive.Change `json:"change"`
 }
@@ -114,6 +121,32 @@ func (e *ChangeEventDetail) MarshalJSON() ([]byte, error) {
 			Kind:            "drive#user",
 			DisplayName:     "Unknown User",
 			ForceSendFields: []string{"EmailAddress", "DisplayName", "Kind"},
+		}
+	}
+	switch {
+	case e.Change.Drive != nil:
+		e.Entity = &TargetEntity{
+			Id:          e.Change.Drive.Id,
+			Kind:        e.Change.Drive.Kind,
+			Name:        e.Change.Drive.Name,
+			CreatedTime: e.Change.Drive.CreatedTime,
+		}
+	case e.Change.File != nil:
+		e.Entity = &TargetEntity{
+			Id:          e.Change.File.Id,
+			Kind:        e.Change.File.Kind,
+			Name:        e.Change.File.Name,
+			CreatedTime: e.Change.File.CreatedTime,
+		}
+	case e.Change.DriveId != "":
+		e.Entity = &TargetEntity{
+			Id:   e.Change.DriveId,
+			Kind: "drive#drive",
+		}
+	case e.Change.FileId != "":
+		e.Entity = &TargetEntity{
+			Id:   e.Change.FileId,
+			Kind: "drive#file",
 		}
 	}
 	type NoMethod ChangeEventDetail

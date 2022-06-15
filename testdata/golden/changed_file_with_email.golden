@@ -1,5 +1,11 @@
 {
   "subject": "File gdnotify (XXXXXXXXXX) changed by hoge [hoge@example.com] at 2022-06-15T00:03:45.843Z",
+  "entity": {
+    "id": "XXXXXXXXXX",
+    "kind": "drive#file",
+    "name": "gdnotify",
+    "createdTime": ""
+  },
   "actor": {
     "displayName": "hoge",
     "emailAddress": "hoge@example.com",
