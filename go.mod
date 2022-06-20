@@ -6,8 +6,8 @@ require (
 	github.com/Songmu/flextime v0.1.0
 	github.com/aws/aws-lambda-go v1.32.0
 	github.com/aws/aws-sdk-go-v2 v1.16.5
-	github.com/aws/aws-sdk-go-v2/config v1.15.10
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.15
+	github.com/aws/aws-sdk-go-v2/config v1.15.11
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.16
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.15.6
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.16.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.11
@@ -39,7 +39,7 @@ require (
 	github.com/BurntSushi/toml v1.1.0 // indirect
 	github.com/agnivade/levenshtein v1.0.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.2 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.12.5 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.6 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.6 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.12 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.6 // indirect
@@ -50,7 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.7.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.13.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.11.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
