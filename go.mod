@@ -26,10 +26,10 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/samber/lo v1.21.0
+	github.com/samber/lo v1.36.0
 	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.1.1
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	google.golang.org/api v0.83.0
 )
