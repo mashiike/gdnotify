@@ -53,7 +53,7 @@ func (cb *SSMParameterStoreCredentialsBackend) WithCredentialsClientOption(ctx c
 	logx.Printf(ctx, "[debug] try get parameter name=%s", cb.name)
 	output, err := cb.client.GetParameter(ctx, &ssm.GetParameterInput{
 		Name:           aws.String(cb.name),
-		WithDecryption: true,
+		WithDecryption: aws.Bool(true),
 	})
 	if err != nil {
 		logx.Printf(ctx, "[debug] failed get parameter name=%s:%s", cb.name, err.Error())
