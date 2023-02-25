@@ -121,8 +121,7 @@ func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
 }
 
 func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
-	var drives map[string]*DriveConfig
-	drives = lo.FromEntries(lo.Map(cfg.Drives, func(cfg *DriveConfig, _ int) lo.Entry[string, *DriveConfig] {
+	drives := lo.FromEntries(lo.Map(cfg.Drives, func(cfg *DriveConfig, _ int) lo.Entry[string, *DriveConfig] {
 		return lo.Entry[string, *DriveConfig]{
 			Key:   cfg.DriveID,
 			Value: cfg,
@@ -139,14 +138,14 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	cleanupFns := make([]func() error, 0)
 	storage, cleanup, err := NewStorage(ctx, cfg.Storage, awsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("Create Storage: %w", err)
+		return nil, fmt.Errorf("create Storage: %w", err)
 	}
 	if cleanup != nil {
 		cleanupFns = append(cleanupFns, cleanup)
 	}
 	notification, cleanup, err := NewNotification(ctx, cfg.Notification, awsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("Create Notification: %w", err)
+		return nil, fmt.Errorf("create Notification: %w", err)
 	}
 	if cleanup != nil {
 		cleanupFns = append(cleanupFns, cleanup)
@@ -161,15 +160,15 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	)
 	credentialsBackend, err := NewCredentialsBackend(ctx, cfg.Credentials, awsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("Create Credentials Backend: %w", err)
+		return nil, fmt.Errorf("create Credentials Backend: %w", err)
 	}
 	gcpOpts, err = credentialsBackend.WithCredentialsClientOption(ctx, gcpOpts)
 	if err != nil {
-		return nil, fmt.Errorf("Google Application Credentials Load: %w", err)
+		return nil, fmt.Errorf("google Application Credentials Load: %w", err)
 	}
 	driveSvc, err := drive.NewService(ctx, gcpOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("Create Google Drive Service: %w", err)
+		return nil, fmt.Errorf("create Google Drive Service: %w", err)
 	}
 
 	rotateRemaining := time.Duration(0.2 * float64(cfg.Expiration))
@@ -281,7 +280,7 @@ func (app *App) runAsWebhookServer(ctx context.Context, opts *RunOptions) error 
 func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error {
 	if isLambda() {
 		logx.Println(ctx, "[info] run on lambda")
-		lambda.StartWithContext(ctx, func(ctx context.Context, event json.RawMessage) (interface{}, error) {
+		lambda.StartWithOptions(func(ctx context.Context, event json.RawMessage) (interface{}, error) {
 			if err := app.maintenanceChannels(ctx, false); err != nil {
 				logx.Println(ctx, "[error] failed maintenance channels: ", err)
 				return nil, err
@@ -289,7 +288,7 @@ func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error
 			return map[string]interface{}{
 				"Status": 200,
 			}, nil
-		})
+		}, lambda.WithContext(ctx))
 		return nil
 	}
 	logx.Println(ctx, "[info] run on local")
@@ -352,8 +351,7 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 	if err != nil {
 		return fmt.Errorf("find all channels: %w", err)
 	}
-	var existsDriveIDs map[string]bool
-	existsDriveIDs = lo.FromEntries(lo.Map(lo.Keys(app.drives), func(driveID string, _ int) lo.Entry[string, bool] {
+	existsDriveIDs := lo.FromEntries(lo.Map(lo.Keys(app.drives), func(driveID string, _ int) lo.Entry[string, bool] {
 		return lo.Entry[string, bool]{
 			Key:   driveID,
 			Value: false,

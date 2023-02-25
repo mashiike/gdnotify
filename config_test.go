@@ -111,7 +111,7 @@ func TestConfigLoadInvalid(t *testing.T) {
 		{
 			casename: "can not load from http",
 			paths:    []string{"testdata/short.yaml", server.URL},
-			expected: server.URL + " load failed: Fetch failed: HTTP 404 Not Found",
+			expected: server.URL + " load failed: fetch failed: HTTP 404 Not Found",
 		},
 	}
 

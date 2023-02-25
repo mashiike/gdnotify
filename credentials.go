@@ -31,7 +31,7 @@ func NewCredentialsBackend(ctx context.Context, cfg *CredentialsBackendConfig, a
 
 type NoneCredentialsBackend struct{}
 
-func (_ *NoneCredentialsBackend) WithCredentialsClientOption(_ context.Context, orig []option.ClientOption) ([]option.ClientOption, error) {
+func (b *NoneCredentialsBackend) WithCredentialsClientOption(_ context.Context, orig []option.ClientOption) ([]option.ClientOption, error) {
 	return orig, nil
 }
 
@@ -53,7 +53,7 @@ func (cb *SSMParameterStoreCredentialsBackend) WithCredentialsClientOption(ctx c
 	logx.Printf(ctx, "[debug] try get parameter name=%s", cb.name)
 	output, err := cb.client.GetParameter(ctx, &ssm.GetParameterInput{
 		Name:           aws.String(cb.name),
-		WithDecryption: true,
+		WithDecryption: aws.Bool(true),
 	})
 	if err != nil {
 		logx.Printf(ctx, "[debug] failed get parameter name=%s:%s", cb.name, err.Error())

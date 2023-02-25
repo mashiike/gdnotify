@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 	logx "github.com/mashiike/go-logx"
 )
 
-//Config for App
+// Config for App
 type Config struct {
 	RequiredVersion string `yaml:"required_version,omitempty"`
 
@@ -127,7 +128,7 @@ func (cfg *Config) load(ctx context.Context, path string) error {
 func fetchConfig(ctx context.Context, path string) ([]byte, error) {
 	u, err := url.Parse(path)
 	if err != nil {
-		return ioutil.ReadFile(path)
+		return os.ReadFile(path)
 	}
 	switch u.Scheme {
 	case "http", "https":
@@ -135,7 +136,7 @@ func fetchConfig(ctx context.Context, path string) ([]byte, error) {
 	case "s3":
 		return fetchConfigFromS3(ctx, u)
 	case "file", "":
-		return ioutil.ReadFile(u.Path)
+		return os.ReadFile(u.Path)
 	default:
 		return nil, fmt.Errorf("scheme %s is not supported", u.Scheme)
 	}
@@ -149,9 +150,9 @@ func fetchConfigFromHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Fetch failed: HTTP %s", resp.Status)
+		return nil, fmt.Errorf("fetch failed: HTTP %s", resp.Status)
 	}
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
