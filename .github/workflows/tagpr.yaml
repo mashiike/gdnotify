@@ -1,0 +1,33 @@
+# .github/workflows/tagpr.yml
+name: tagpr
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  tagpr:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+      - id: tagpr
+        uses: Songmu/tagpr@main
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.tag }}
+        if: ${{ steps.tagpr.outputs.tag != '' }}
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+            go-version: "1.20"
+        if: ${{ steps.tagpr.outputs.tag != '' }}
+      - name: Run GoReleaser
+          uses: goreleaser/goreleaser-action@v3
+          with:
+            version: latest
+            args: release --rm-dist
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ steps.tagpr.outputs.tag != '' }}
