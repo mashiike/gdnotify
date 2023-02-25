@@ -18,19 +18,19 @@ import (
 func TestConvertChannelItemDynamoDBAttributeValues(t *testing.T) {
 	N := 10
 	items := make([]*gdnotify.ChannelItem, 0, N)
-	rand.Seed(time.Now().Unix())
+	r := rand.New(rand.NewSource(time.Now().Unix()))
 	for i := 0; i < N; i++ {
 		uuidObj, _ := uuid.NewRandom()
 
 		items = append(items, &gdnotify.ChannelItem{
 			ChannelID:          uuidObj.String(),
 			DriveID:            randstr.CryptoString(10),
-			PageToken:          fmt.Sprintf("%d", rand.Intn(100)+1),
-			Expiration:         time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+			PageToken:          fmt.Sprintf("%d", r.Intn(100)+1),
+			Expiration:         time.Unix(1650000000+int64(r.Intn(5000000)), 0).In(time.Local),
 			ResourceID:         randstr.CryptoString(12),
-			PageTokenFetchedAt: time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
-			CreatedAt:          time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
-			UpdatedAt:          time.Unix(1650000000+int64(rand.Intn(5000000)), 0).In(time.Local),
+			PageTokenFetchedAt: time.Unix(1650000000+int64(r.Intn(5000000)), 0).In(time.Local),
+			CreatedAt:          time.Unix(1650000000+int64(r.Intn(5000000)), 0).In(time.Local),
+			UpdatedAt:          time.Unix(1650000000+int64(r.Intn(5000000)), 0).In(time.Local),
 		})
 	}
 	expectedKeys := []string{

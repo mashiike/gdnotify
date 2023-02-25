@@ -93,7 +93,6 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, http.StatusText(http.StatusOK))
-	return
 }
 
 func coalesce(strs ...string) string {

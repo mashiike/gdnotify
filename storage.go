@@ -39,10 +39,7 @@ func (item *ChannelItem) IsAboutToExpired(ctx context.Context, remaining time.Du
 	logx.Printf(ctx, "[debug] IsAboutToExpired remaining=%s expiration=%s, now=%s, channel_id=%s, resource_id=%s, drive_id=%s ",
 		d, item.Expiration.Format(time.RFC3339), now.Format(time.RFC3339), item.ChannelID, item.ResourceID, item.DriveID,
 	)
-	if d <= remaining {
-		return true
-	}
-	return false
+	return d <= remaining
 }
 
 func GetAttributeValueAs[T types.AttributeValue](key string, values map[string]types.AttributeValue) (T, bool) {
@@ -65,7 +62,7 @@ func NewChannelItemWithDynamoDBAttributeValues(values map[string]types.Attribute
 	}
 	expirationValue, ok := GetAttributeValueAs[*types.AttributeValueMemberN]("Expiration", values)
 	if ok {
-		if expiration, err := strconv.ParseFloat(expirationValue.Value, 10); err == nil {
+		if expiration, err := strconv.ParseFloat(expirationValue.Value, 64); err == nil {
 			item.Expiration = time.UnixMilli(int64(expiration))
 		}
 	}
@@ -83,19 +80,19 @@ func NewChannelItemWithDynamoDBAttributeValues(values map[string]types.Attribute
 	}
 	pageTokenFetchedAtValue, ok := GetAttributeValueAs[*types.AttributeValueMemberN]("PageTokenFetchedAt", values)
 	if ok {
-		if pageTokenFetchedAt, err := strconv.ParseFloat(pageTokenFetchedAtValue.Value, 10); err == nil {
+		if pageTokenFetchedAt, err := strconv.ParseFloat(pageTokenFetchedAtValue.Value, 64); err == nil {
 			item.PageTokenFetchedAt = time.UnixMilli(int64(pageTokenFetchedAt))
 		}
 	}
 	createdAtValue, ok := GetAttributeValueAs[*types.AttributeValueMemberN]("CreatedAt", values)
 	if ok {
-		if createdAt, err := strconv.ParseFloat(createdAtValue.Value, 10); err == nil {
+		if createdAt, err := strconv.ParseFloat(createdAtValue.Value, 64); err == nil {
 			item.CreatedAt = time.UnixMilli(int64(createdAt))
 		}
 	}
 	updatedAtValue, ok := GetAttributeValueAs[*types.AttributeValueMemberN]("UpdatedAt", values)
 	if ok {
-		if updatedAt, err := strconv.ParseFloat(updatedAtValue.Value, 10); err == nil {
+		if updatedAt, err := strconv.ParseFloat(updatedAtValue.Value, 64); err == nil {
 			item.UpdatedAt = time.UnixMilli(int64(updatedAt))
 		}
 	}

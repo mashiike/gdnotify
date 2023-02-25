@@ -31,7 +31,7 @@ func NewCredentialsBackend(ctx context.Context, cfg *CredentialsBackendConfig, a
 
 type NoneCredentialsBackend struct{}
 
-func (_ *NoneCredentialsBackend) WithCredentialsClientOption(_ context.Context, orig []option.ClientOption) ([]option.ClientOption, error) {
+func (b *NoneCredentialsBackend) WithCredentialsClientOption(_ context.Context, orig []option.ClientOption) ([]option.ClientOption, error) {
 	return orig, nil
 }
 
