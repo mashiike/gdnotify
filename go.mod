@@ -14,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.35.5
 	github.com/aws/smithy-go v1.13.5
 	github.com/fatih/color v1.14.1
-	github.com/fujiwara/logutils v1.1.0
+	github.com/fujiwara/logutils v1.1.1
 	github.com/fujiwara/ridge v0.6.1
 	github.com/gofrs/flock v0.8.1
 	github.com/google/uuid v1.3.0
