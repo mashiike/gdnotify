@@ -24,12 +24,13 @@ import (
 type Config struct {
 	RequiredVersion string `yaml:"required_version,omitempty"`
 
-	Webhook      string                    `yaml:"webhook,omitempty"`
-	Credentials  *CredentialsBackendConfig `yaml:"credentials,omitempty"`
-	Expiration   time.Duration             `yaml:"expiration,omitempty"`
-	Storage      *StorageConfig            `yaml:"storage,omitempty"`
-	Notification *NotificationConfig       `yaml:"notification,omitempty"`
-	Drives       []*DriveConfig            `yaml:"drives,omitempty"`
+	Webhook            string                    `yaml:"webhook,omitempty"`
+	Credentials        *CredentialsBackendConfig `yaml:"credentials,omitempty"`
+	Expiration         time.Duration             `yaml:"expiration,omitempty"`
+	Storage            *StorageConfig            `yaml:"storage,omitempty"`
+	Notification       *NotificationConfig       `yaml:"notification,omitempty"`
+	Drives             []*DriveConfig            `yaml:"drives,omitempty"`
+	WithinModifiedTime *time.Duration            `yaml:"within_modified_time,omitempty"`
 
 	versionConstraints gv.Constraints `yaml:"version_constraints,omitempty"`
 }

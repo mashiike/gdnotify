@@ -75,7 +75,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			coalesce(channelID, "-"),
 			coalesce(resourceID, "-"),
 		)
-		if err := app.notification.SendChanges(ctx, item, changes); err != nil {
+		if err := app.SendNotification(ctx, item, changes); err != nil {
 			logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
 				coalesce(channelID, "-"),
 				coalesce(resourceID, "-"),
