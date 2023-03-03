@@ -29,7 +29,7 @@ require (
 	github.com/samber/lo v1.37.0
 	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.1.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/sync v0.1.0
 	google.golang.org/api v0.110.0
 )
