@@ -213,10 +213,12 @@ func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) 
 	case RunModeMaintainer:
 		logx.Println(ctx, "[info] run as channel maintainer")
 		return app.runAsChannelMaintainer(ctx, opts)
+	case RunModeSyncer:
+		logx.Println(ctx, "[info] run as channel syncer")
+		return app.runAsChannelSyncer(ctx, opts)
 	case RunModeCLI:
 		logx.Println(ctx, "[info] run as CLI")
 		return app.runAsCLI(ctx, opts)
-		//return app.cleanupChannels(ctx)
 	}
 
 	return errors.New("unknown run mode")
@@ -284,6 +286,24 @@ func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error
 	}
 	logx.Println(ctx, "[info] run on local")
 	return app.maintenanceChannels(ctx, false)
+}
+
+func (app *App) runAsChannelSyncer(ctx context.Context, _ *RunOptions) error {
+	if isLambda() {
+		logx.Println(ctx, "[info] run on lambda")
+		lambda.StartWithOptions(func(ctx context.Context) (interface{}, error) {
+			if err := app.syncChannels(ctx); err != nil {
+				logx.Println(ctx, "[error] failed sync channels: ", err)
+				return nil, err
+			}
+			return map[string]interface{}{
+				"Status": 200,
+			}, nil
+		}, lambda.WithContext(ctx))
+		return nil
+	}
+	logx.Println(ctx, "[info] run on local")
+	return app.syncChannels(ctx)
 }
 
 func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
