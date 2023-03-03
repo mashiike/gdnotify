@@ -33,14 +33,15 @@ import (
 )
 
 type App struct {
-	storage         Storage
-	notification    Notification
-	drives          map[string]*DriveConfig
-	rotateRemaining time.Duration
-	driveSvc        *drive.Service
-	cleanupFns      []func() error
-	expiration      time.Duration
-	webhookAddress  string
+	storage            Storage
+	notification       Notification
+	drives             map[string]*DriveConfig
+	rotateRemaining    time.Duration
+	driveSvc           *drive.Service
+	cleanupFns         []func() error
+	expiration         time.Duration
+	withinModifiedTime *time.Duration
+	webhookAddress     string
 }
 
 type RunOptions struct {
@@ -166,14 +167,15 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	log.Printf("[debug] cfg.Expiration=%s 20%% rotateRemaining=%s", cfg.Expiration, rotateRemaining)
 
 	app := &App{
-		storage:         storage,
-		notification:    notification,
-		drives:          drives,
-		rotateRemaining: rotateRemaining,
-		driveSvc:        driveSvc,
-		cleanupFns:      cleanupFns,
-		webhookAddress:  cfg.Webhook,
-		expiration:      cfg.Expiration,
+		storage:            storage,
+		notification:       notification,
+		drives:             drives,
+		rotateRemaining:    rotateRemaining,
+		driveSvc:           driveSvc,
+		cleanupFns:         cleanupFns,
+		webhookAddress:     cfg.Webhook,
+		expiration:         cfg.Expiration,
+		withinModifiedTime: cfg.WithinModifiedTime,
 	}
 	return app, nil
 }
@@ -569,7 +571,7 @@ func (app *App) syncChannels(ctx context.Context) error {
 					coalesce(item.ChannelID, "-"),
 					coalesce(item.ResourceID, "-"),
 				)
-				if err := app.notification.SendChanges(ctx, item, changes); err != nil {
+				if err := app.SendNotification(ctx, item, changes); err != nil {
 					logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
 						coalesce(item.ChannelID, "-"),
 						coalesce(item.ResourceID, "-"),
@@ -733,4 +735,33 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 		return nil, nil, err
 	}
 	return changes, &newItem, nil
+}
+
+func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
+	logx.Printf(ctx, "[debug] send notification for channel %s", item.ChannelID)
+	if app.withinModifiedTime == nil {
+		logx.Printf(ctx, "[debug] no filter send for %s", item.ChannelID)
+		return app.notification.SendChanges(ctx, item, changes)
+	}
+	logx.Printf(ctx, "[debug] try filter %s", item.ChannelID)
+	now := time.Now()
+	filterd := make([]*drive.Change, 0, len(changes))
+	for _, change := range changes {
+		if change.File == nil {
+			filterd = append(filterd, change)
+			continue
+		}
+		logx.Printf(ctx, "[debug] try check modified time: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+		t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
+		if err != nil {
+			filterd = append(filterd, change)
+			continue
+		}
+		if now.Sub(t) > *app.withinModifiedTime {
+			logx.Printf(ctx, "[info] filterd changes item: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+			continue
+		}
+		filterd = append(filterd, change)
+	}
+	return app.notification.SendChanges(ctx, item, filterd)
 }
