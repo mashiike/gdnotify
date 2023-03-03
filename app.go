@@ -49,15 +49,6 @@ type RunOptions struct {
 	CLICommand   CLICommand
 }
 
-type RunMode int
-
-//go:generate enumer -type=RunMode -trimprefix RunMode -transform=snake -output run_mode_enumer.gen.go
-const (
-	RunModeCLI RunMode = iota
-	RunModeWebhook
-	RunModeMaintainer
-)
-
 func WithRunMode(mode string) func(*RunOptions) error {
 	return func(opts *RunOptions) error {
 		if m, err := RunModeString(mode); err != nil {
