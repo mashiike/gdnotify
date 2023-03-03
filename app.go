@@ -49,15 +49,6 @@ type RunOptions struct {
 	CLICommand   CLICommand
 }
 
-type RunMode int
-
-//go:generate enumer -type=RunMode -trimprefix RunMode -transform=snake -output run_mode_enumer.gen.go
-const (
-	RunModeCLI RunMode = iota
-	RunModeWebhook
-	RunModeMaintainer
-)
-
 func WithRunMode(mode string) func(*RunOptions) error {
 	return func(opts *RunOptions) error {
 		if m, err := RunModeString(mode); err != nil {
@@ -222,10 +213,12 @@ func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) 
 	case RunModeMaintainer:
 		logx.Println(ctx, "[info] run as channel maintainer")
 		return app.runAsChannelMaintainer(ctx, opts)
+	case RunModeSyncer:
+		logx.Println(ctx, "[info] run as channel syncer")
+		return app.runAsChannelSyncer(ctx, opts)
 	case RunModeCLI:
 		logx.Println(ctx, "[info] run as CLI")
 		return app.runAsCLI(ctx, opts)
-		//return app.cleanupChannels(ctx)
 	}
 
 	return errors.New("unknown run mode")
@@ -295,32 +288,22 @@ func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error
 	return app.maintenanceChannels(ctx, false)
 }
 
-type CLICommand int
-
-//go:generate enumer -type=CLICommand -trimprefix CLICommand -transform=snake -output cli_command_enumer.gen.go
-const (
-	CLICommandList CLICommand = iota
-	CLICommandServe
-	CLICommandRegister
-	CLICommandMaintenance
-	CLICommandCleanup
-)
-
-func (cmd CLICommand) Description() string {
-	switch cmd {
-	case CLICommandList:
-		return "list notification channels"
-	case CLICommandServe:
-		return "serve webhook server"
-	case CLICommandRegister:
-		return "register a new notification channel for a drive for which a notification channel has not yet been set"
-	case CLICommandMaintenance:
-		return "re-register expired notification channels or register new unregistered channels."
-	case CLICommandCleanup:
-		return "remove all notification channels"
-	default:
-		return ""
+func (app *App) runAsChannelSyncer(ctx context.Context, _ *RunOptions) error {
+	if isLambda() {
+		logx.Println(ctx, "[info] run on lambda")
+		lambda.StartWithOptions(func(ctx context.Context) (interface{}, error) {
+			if err := app.syncChannels(ctx); err != nil {
+				logx.Println(ctx, "[error] failed sync channels: ", err)
+				return nil, err
+			}
+			return map[string]interface{}{
+				"Status": 200,
+			}, nil
+		}, lambda.WithContext(ctx))
+		return nil
 	}
+	logx.Println(ctx, "[info] run on local")
+	return app.syncChannels(ctx)
 }
 
 func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
@@ -338,6 +321,8 @@ func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
 		return app.maintenanceChannels(ctx, false)
 	case CLICommandCleanup:
 		return app.cleanupChannels(ctx)
+	case CLICommandSync:
+		return app.syncChannels(ctx)
 	default:
 		return fmt.Errorf("unknown cli command `%s`", opts.CLICommand)
 	}
@@ -556,6 +541,52 @@ func (app *App) cleanupChannels(ctx context.Context) error {
 	return nil
 }
 
+func (app *App) syncChannels(ctx context.Context) error {
+	itemsCh, err := app.storage.FindAllChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("find all channels: %w", err)
+	}
+	for items := range itemsCh {
+		for _, item := range items {
+			logx.Printf(ctx,
+				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
+				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
+			)
+			changes, _, err := app.changesList(ctx, item)
+			if err != nil {
+				logx.Printf(ctx, "[warn] failed sync channel_id=%s, resource_id=%s, drive_id=%s", item.ChannelID, item.ResourceID, item.DriveID)
+				continue
+			}
+			if err != nil {
+				logx.Printf(ctx, "[warn] get changes list failed channel_id:%s resource_id:%s err:%s",
+					coalesce(item.ChannelID, "-"),
+					coalesce(item.ResourceID, "-"),
+					err.Error(),
+				)
+			}
+			if len(changes) > 0 {
+				logx.Printf(ctx, "[debug] send changes channel_id:%s resource_id:%s",
+					coalesce(item.ChannelID, "-"),
+					coalesce(item.ResourceID, "-"),
+				)
+				if err := app.notification.SendChanges(ctx, item, changes); err != nil {
+					logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
+						coalesce(item.ChannelID, "-"),
+						coalesce(item.ResourceID, "-"),
+						err.Error(),
+					)
+				}
+			} else {
+				logx.Printf(ctx, "[debug] no changes channel_id:%s resource_id:%s",
+					coalesce(item.ChannelID, "-"),
+					coalesce(item.ResourceID, "-"),
+				)
+			}
+		}
+	}
+	return nil
+}
+
 func (app *App) DeleteChannel(ctx context.Context, item *ChannelItem) error {
 	logx.Printf(ctx, "[info] delete channel id=%s, resource_id=%s, drive_id=%s page_token=%s",
 		item.ChannelID, item.ResourceID, item.DriveID, item.PageToken,
@@ -653,7 +684,10 @@ func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Cha
 	logx.Printf(ctx, "[debug] try change list channel id=%s, resource_id=%s, drive_id=%s",
 		item.ChannelID, item.ResourceID, item.DriveID,
 	)
+	return app.changesList(ctx, item)
+}
 
+func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Change, *ChannelItem, error) {
 	changes := make([]*drive.Change, 0, 100)
 	nextPageToken := ""
 	newStartPageToken := ""
@@ -668,20 +702,19 @@ func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Cha
 			call = call.DriveId(item.DriveID)
 		}
 		changeList, err := call.Context(ctx).Do()
-		logx.Printf(ctx, "[debug] try Drive API changes:list: channel_id=%s drive_id=%s page_token=%s", channelID, item.DriveID, pageToken)
+		logx.Printf(ctx, "[debug] try Drive API changes:list: channel_id=%s drive_id=%s page_token=%s", item.ChannelID, item.DriveID, pageToken)
 		if err != nil {
 			logx.Printf(ctx, "[debug] failed Drive API changes:list channel id=%s, resource_id=%s, drive_id=%s: %s",
 				item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
 			)
 			return err
 		}
-		logx.Printf(ctx, "[debug] success Drive API changes:list: channel_id=%s drive_id=%s, pageToken=%s changes=%d", channelID, item.DriveID, pageToken, len(changeList.Changes))
+		logx.Printf(ctx, "[debug] success Drive API changes:list: channel_id=%s drive_id=%s, pageToken=%s changes=%d", item.ChannelID, item.DriveID, pageToken, len(changeList.Changes))
 		changes = append(changes, changeList.Changes...)
 		nextPageToken = changeList.NextPageToken
 		newStartPageToken = changeList.NewStartPageToken
-		logx.Printf(ctx, "[debug] Drive API changes:list: channel_id=%s drive_id=%s, next_page_token=%s  new_start_page_token=%s", channelID, item.DriveID, pageToken, newStartPageToken)
+		logx.Printf(ctx, "[debug] Drive API changes:list: channel_id=%s drive_id=%s, next_page_token=%s  new_start_page_token=%s", item.ChannelID, item.DriveID, pageToken, newStartPageToken)
 		return nil
-
 	}
 	if err := process(ctx, item.PageToken); err != nil {
 		return nil, nil, err
@@ -692,7 +725,7 @@ func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Cha
 			return nil, nil, err
 		}
 	}
-	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", channelID, item.PageToken, newStartPageToken)
+	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", item.ChannelID, item.PageToken, newStartPageToken)
 	newItem := *item
 	newItem.PageToken = newStartPageToken
 	newItem.UpdatedAt = flextime.Now()
