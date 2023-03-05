@@ -31,6 +31,7 @@ type Config struct {
 	Notification       *NotificationConfig       `yaml:"notification,omitempty"`
 	Drives             []*DriveConfig            `yaml:"drives,omitempty"`
 	WithinModifiedTime *time.Duration            `yaml:"within_modified_time,omitempty"`
+	DrivesAutoDetect   *bool                     `yaml:"drives_auto_detect,omitempty"`
 
 	versionConstraints gv.Constraints `yaml:"version_constraints,omitempty"`
 }
@@ -211,6 +212,11 @@ func (cfg *Config) Restrict() error {
 	}
 	if err := cfg.Notification.Restrict(); err != nil {
 		return fmt.Errorf("notification:%w", err)
+	}
+	if cfg.DrivesAutoDetect == nil {
+		log.Println("[warn] after v0.5.0 drives_auto_ditect default value is true, but now set false")
+		value := false
+		cfg.DrivesAutoDetect = &value
 	}
 	for i, driveCfg := range cfg.Drives {
 		if err := driveCfg.Restrict(); err != nil {
