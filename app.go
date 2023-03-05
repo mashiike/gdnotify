@@ -35,6 +35,7 @@ import (
 type App struct {
 	storage            Storage
 	notification       Notification
+	drivesAutoDetect   bool
 	drives             map[string]*DriveConfig
 	rotateRemaining    time.Duration
 	driveSvc           *drive.Service
@@ -169,6 +170,7 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	app := &App{
 		storage:            storage,
 		notification:       notification,
+		drivesAutoDetect:   *cfg.DrivesAutoDetect,
 		drives:             drives,
 		rotateRemaining:    rotateRemaining,
 		driveSvc:           driveSvc,
@@ -330,6 +332,33 @@ func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
 	}
 }
 
+func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
+	driveIDs := lo.Keys(app.drives)
+	if !app.drivesAutoDetect {
+		return driveIDs, nil
+	}
+	if len(driveIDs) == 0 {
+		driveIDs = append(driveIDs, DefaultDriveID)
+	}
+	nextPageToken := "__initial__"
+	for nextPageToken != "" {
+		cell := app.driveSvc.Drives.List().PageSize(2).Context(ctx)
+		if nextPageToken != "__initial__" {
+			cell = cell.PageToken(nextPageToken)
+		}
+		drivesListResp, err := cell.Do()
+		if err != nil {
+			return nil, fmt.Errorf("Drives::list %w", err)
+		}
+		for _, driveResp := range drivesListResp.Drives {
+			log.Printf("[info] auto detect `%s (%s)`", driveResp.Id, driveResp.Name)
+			driveIDs = append(driveIDs, driveResp.Id)
+		}
+		nextPageToken = drivesListResp.NextPageToken
+	}
+	return lo.Uniq(driveIDs), nil
+}
+
 func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
 	if app.webhookAddress == "" {
 		return errors.New("webhook address is empty, plz check configure")
@@ -338,7 +367,11 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 	if err != nil {
 		return fmt.Errorf("find all channels: %w", err)
 	}
-	existsDriveIDs := lo.FromEntries(lo.Map(lo.Keys(app.drives), func(driveID string, _ int) lo.Entry[string, bool] {
+	driveIDs, err := app.DriveIDs(ctx)
+	if err != nil {
+		return fmt.Errorf("get DriveIDs: %w", err)
+	}
+	existsDriveIDs := lo.FromEntries(lo.Map(driveIDs, func(driveID string, _ int) lo.Entry[string, bool] {
 		return lo.Entry[string, bool]{
 			Key:   driveID,
 			Value: false,
