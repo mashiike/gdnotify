@@ -348,7 +348,7 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 		}
 		drivesListResp, err := cell.Do()
 		if err != nil {
-			return nil, fmt.Errorf("Drives::list %w", err)
+			return nil, fmt.Errorf("access Drives::list %w", err)
 		}
 		for _, driveResp := range drivesListResp.Drives {
 			log.Printf("[info] auto detect `%s (%s)`", driveResp.Id, driveResp.Name)
