@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.0](https://github.com/mashiike/gdnotify/compare/v0.3.0...v0.4.0) - 2023-03-06
+- [feature] auto detect target drives from gcp credentials by @mashiike in https://github.com/mashiike/gdnotify/pull/156
+- fix static lint by @mashiike in https://github.com/mashiike/gdnotify/pull/158
+
 ## [v0.3.0](https://github.com/mashiike/gdnotify/compare/v0.2.1...v0.3.0) - 2023-03-03
 - sync command by @mashiike in https://github.com/mashiike/gdnotify/pull/147
 - Bump goreleaser/goreleaser-action from 3 to 4 by @dependabot in https://github.com/mashiike/gdnotify/pull/148
