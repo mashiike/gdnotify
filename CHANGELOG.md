@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.2](https://github.com/mashiike/gdnotify/compare/v0.4.1...v0.4.2) - 2023-03-15
+- Bump github.com/aws/aws-sdk-go-v2/service/dynamodb from 1.18.5 to 1.19.1 by @dependabot in https://github.com/mashiike/gdnotify/pull/162
+- add log for ops, channel_expiration dump logs by @mashiike in https://github.com/mashiike/gdnotify/pull/168
+
 ## [v0.4.1](https://github.com/mashiike/gdnotify/compare/v0.4.0...v0.4.1) - 2023-03-15
 - fix : syncer does not belong to RunMode values by @mashiike in https://github.com/mashiike/gdnotify/pull/165
 - Bump github.com/fatih/color from 1.14.1 to 1.15.0 by @dependabot in https://github.com/mashiike/gdnotify/pull/164
