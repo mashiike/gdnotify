@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.4.1](https://github.com/mashiike/gdnotify/compare/v0.4.0...v0.4.1) - 2023-03-15
+- fix : syncer does not belong to RunMode values by @mashiike in https://github.com/mashiike/gdnotify/pull/165
+- Bump github.com/fatih/color from 1.14.1 to 1.15.0 by @dependabot in https://github.com/mashiike/gdnotify/pull/164
+- Bump github.com/fujiwara/logutils from 1.1.0 to 1.1.2 by @dependabot in https://github.com/mashiike/gdnotify/pull/159
+- Bump github.com/aws/aws-sdk-go-v2/config from 1.18.15 to 1.18.16 by @dependabot in https://github.com/mashiike/gdnotify/pull/163
+
 ## [v0.4.0](https://github.com/mashiike/gdnotify/compare/v0.3.0...v0.4.0) - 2023-03-06
 - [feature] auto detect target drives from gcp credentials by @mashiike in https://github.com/mashiike/gdnotify/pull/156
 - fix static lint by @mashiike in https://github.com/mashiike/gdnotify/pull/158
