@@ -16,7 +16,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	state := r.Header.Get("X-Goog-Resource-State")
 	userAgent := r.Header.Get("User-Agent")
 	resourceID := r.Header.Get("X-Goog-Resource-Id")
-	logx.Printf(ctx, "[info] method:%s uri:%s user_agent:%s channel_id:%s resource_id:%s resource_state:%s message_number:%s forwarded_for:%s",
+	logx.Printf(ctx, "[info] method:%s uri:%s user_agent:%s channel_id:%s resource_id:%s resource_state:%s message_number:%s forwarded_for:%s channel_expiration:%s",
 		coalesce(r.Method, "-"),
 		coalesce(r.URL.String(), "-"),
 		url.QueryEscape(coalesce(userAgent, "-")),
@@ -25,6 +25,7 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		coalesce(state, "-"),
 		coalesce(r.Header.Get("X-Goog-Message-Number"), "-"),
 		coalesce(r.Header.Get("X-Forwarded-For"), "-"),
+		coalesce(r.Header.Get("X-Goog-Channel-Expiration"), "-"),
 	)
 	defer r.Body.Close()
 	if d, err := httputil.DumpRequest(r, true); err == nil {
