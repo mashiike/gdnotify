@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.19.1
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.18.5
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.30.6
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.35.5
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.35.6
 	github.com/aws/smithy-go v1.13.5
 	github.com/fatih/color v1.15.0
 	github.com/fujiwara/logutils v1.1.2
