@@ -26,7 +26,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/samber/lo v1.37.0
+	github.com/samber/lo v1.38.1
 	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.1.1
 	github.com/stretchr/testify v1.8.2
