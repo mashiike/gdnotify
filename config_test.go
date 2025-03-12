@@ -48,14 +48,6 @@ func TestConfigLoadNoError(t *testing.T) {
 			},
 		},
 		{
-			casename: "with ssm",
-			paths:    []string{"testdata/with_ssm.yaml"},
-			check: func(t *testing.T, actual *gdnotify.Config) {
-				require.EqualValues(t, gdnotify.CredentialsBackendTypeSSMParameterStore, actual.Credentials.BackendType)
-				require.EqualValues(t, "/gdnotify/GOOGLE_APPLICATION_CREDENTIALS", *actual.Credentials.ParameterName)
-			},
-		},
-		{
 			casename: "short",
 			paths:    []string{"testdata/short.yaml"},
 			check: func(t *testing.T, actual *gdnotify.Config) {

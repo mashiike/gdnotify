@@ -21,6 +21,7 @@ import (
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/mashiike/gcreds4aws"
 	logx "github.com/mashiike/go-logx"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
@@ -86,15 +87,11 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 			drive.DriveScope,
 			drive.DriveFileScope,
 		),
+		gcreds4aws.WithCredentials(ctx),
 	)
-	credentialsBackend, err := NewCredentialsBackend(ctx, cfg.Credentials, awsCfg)
-	if err != nil {
-		return nil, fmt.Errorf("create Credentials Backend: %w", err)
-	}
-	gcpOpts, err = credentialsBackend.WithCredentialsClientOption(ctx, gcpOpts)
-	if err != nil {
-		return nil, fmt.Errorf("google Application Credentials Load: %w", err)
-	}
+	cleanupFns = append(cleanupFns, func() error {
+		return gcreds4aws.Close()
+	})
 	driveSvc, err := drive.NewService(ctx, gcpOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("create Google Drive Service: %w", err)

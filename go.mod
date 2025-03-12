@@ -11,7 +11,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.37.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.2
 	github.com/aws/smithy-go v1.22.3
 	github.com/fatih/color v1.18.0
 	github.com/fujiwara/ridge v0.12.1
@@ -20,6 +19,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kayac/go-config v0.7.0
+	github.com/mashiike/gcreds4aws v0.1.2
 	github.com/mashiike/go-logx v0.0.0
 	github.com/mashiike/sloglevel v0.1.0
 	github.com/mashiike/slogutils v0.4.0
@@ -51,6 +51,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.10.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.25.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
