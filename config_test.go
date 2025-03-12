@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/mashiike/gdnotify"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,9 +25,6 @@ func TestConfigLoadNoError(t *testing.T) {
 				require.EqualValues(t, defaultCfg.Expiration, actual.Expiration)
 				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
-				require.ElementsMatch(t, []string{gdnotify.DefaultDriveID, "0XXXXXXXXXXXXXXXXXX"}, lo.Map(actual.Drives, func(cfg *gdnotify.DriveConfig, _ int) string {
-					return cfg.DriveID
-				}))
 			},
 		},
 		{
@@ -39,9 +35,6 @@ func TestConfigLoadNoError(t *testing.T) {
 				defaultCfg.Restrict()
 				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
-				require.ElementsMatch(t, []string{gdnotify.DefaultDriveID, "0XXXXXXXXXXXXXXXXXX"}, lo.Map(actual.Drives, func(cfg *gdnotify.DriveConfig, _ int) string {
-					return cfg.DriveID
-				}))
 			},
 		},
 		{
@@ -52,7 +45,6 @@ func TestConfigLoadNoError(t *testing.T) {
 				defaultCfg.Restrict()
 				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
-				require.EqualValues(t, defaultCfg.Drives, actual.Drives)
 			},
 		},
 		{
@@ -71,9 +63,6 @@ func TestConfigLoadNoError(t *testing.T) {
 				defaultCfg.Restrict()
 				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
-				require.ElementsMatch(t, []string{gdnotify.DefaultDriveID, "0XXXXXXXXXXXXXXXXXX"}, lo.Map(actual.Drives, func(cfg *gdnotify.DriveConfig, _ int) string {
-					return cfg.DriveID
-				}))
 			},
 		},
 	}

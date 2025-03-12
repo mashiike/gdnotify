@@ -1,7 +1,9 @@
 package gdnotify
 
 import (
+	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -97,7 +99,25 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) handleSync(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement
+	ctx := context.Background()
+	var hasErr bool
+	if err := app.maintenanceChannels(ctx, false); err != nil {
+		slog.WarnContext(ctx, "maintenance channels failed", "details", err)
+		hasErr = true
+		return
+	}
+	if err := app.syncChannels(ctx); err != nil {
+		slog.WarnContext(ctx, "sync channels failed", "details", err)
+		hasErr = true
+		return
+	}
+	if hasErr {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, http.StatusText(http.StatusOK))
 }
 
 func coalesce(strs ...string) string {

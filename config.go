@@ -29,9 +29,7 @@ type Config struct {
 	Expiration         time.Duration             `yaml:"expiration,omitempty"`
 	Storage            *StorageConfig            `yaml:"storage,omitempty"`
 	Notification       *NotificationConfig       `yaml:"notification,omitempty"`
-	Drives             []*DriveConfig            `yaml:"drives,omitempty"`
 	WithinModifiedTime *time.Duration            `yaml:"within_modified_time,omitempty"`
-	DrivesAutoDetect   *bool                     `yaml:"drives_auto_detect,omitempty"`
 
 	versionConstraints gv.Constraints `yaml:"version_constraints,omitempty"`
 }
@@ -79,14 +77,6 @@ type NotificationConfig struct {
 	EventFile *string          `yaml:"event_file,omitempty"`
 }
 
-const (
-	DefaultDriveID = "__default__"
-)
-
-type DriveConfig struct {
-	DriveID string `yaml:"drive_id,omitempty"`
-}
-
 func DefaultConfig() *Config {
 	return &Config{
 		Expiration: 7 * 24 * time.Hour,
@@ -100,11 +90,6 @@ func DefaultConfig() *Config {
 		Notification: &NotificationConfig{
 			Type:     NotificationTypeEventBridge,
 			EventBus: aws.String("default"),
-		},
-		Drives: []*DriveConfig{
-			{
-				DriveID: DefaultDriveID,
-			},
 		},
 	}
 }
@@ -201,9 +186,6 @@ func (cfg *Config) Restrict() error {
 	if cfg.Notification == nil {
 		return errors.New("notification does not configured")
 	}
-	if len(cfg.Drives) == 0 {
-		return errors.New("dries does not configured")
-	}
 	if err := cfg.Credentials.Restrict(); err != nil {
 		return fmt.Errorf("credentials:%w", err)
 	}
@@ -212,16 +194,6 @@ func (cfg *Config) Restrict() error {
 	}
 	if err := cfg.Notification.Restrict(); err != nil {
 		return fmt.Errorf("notification:%w", err)
-	}
-	if cfg.DrivesAutoDetect == nil {
-		log.Println("[warn] after v0.5.0 drives_auto_ditect default value is true, but now set false")
-		value := false
-		cfg.DrivesAutoDetect = &value
-	}
-	for i, driveCfg := range cfg.Drives {
-		if err := driveCfg.Restrict(); err != nil {
-			return fmt.Errorf("drives[%d]:%w", i, err)
-		}
 	}
 	return nil
 }
@@ -305,14 +277,6 @@ func (cfg *NotificationConfig) restrictEventBridge() error {
 func (cfg *NotificationConfig) restrictFile() error {
 	if cfg.EventFile == nil || *cfg.EventFile == "" {
 		return errors.New("event_file is required, if type is File")
-	}
-	return nil
-}
-
-// Restrict restricts a configuration.
-func (cfg *DriveConfig) Restrict() error {
-	if cfg.DriveID == "" {
-		return errors.New("drive_id is required")
 	}
 	return nil
 }

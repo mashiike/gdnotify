@@ -10,7 +10,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Songmu/flextime"
@@ -31,8 +33,6 @@ import (
 type App struct {
 	storage            Storage
 	notification       Notification
-	drivesAutoDetect   bool
-	drives             map[string]*DriveConfig
 	rotateRemaining    time.Duration
 	driveSvc           *drive.Service
 	cleanupFns         []func() error
@@ -40,6 +40,9 @@ type App struct {
 	withinModifiedTime *time.Duration
 	webhookAddress     string
 	router             *mux.Router
+	driveIDsCache      []string
+	driveIDsFetchedAt  time.Time
+	driveIDsMu         sync.Mutex
 }
 
 func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
@@ -55,13 +58,6 @@ func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
 }
 
 func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
-	drives := lo.FromEntries(lo.Map(cfg.Drives, func(cfg *DriveConfig, _ int) lo.Entry[string, *DriveConfig] {
-		return lo.Entry[string, *DriveConfig]{
-			Key:   cfg.DriveID,
-			Value: cfg,
-		}
-	}))
-
 	ctx := context.Background()
 	awsCfg, err := defaultAWSConfig(ctx)
 	if err != nil {
@@ -110,8 +106,6 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	app := &App{
 		storage:            storage,
 		notification:       notification,
-		drivesAutoDetect:   *cfg.DrivesAutoDetect,
-		drives:             drives,
 		rotateRemaining:    rotateRemaining,
 		driveSvc:           driveSvc,
 		cleanupFns:         cleanupFns,
@@ -178,17 +172,21 @@ func (app *App) Sync(ctx context.Context, _ SyncOption) error {
 	return app.syncChannels(ctx)
 }
 
+const (
+	DefaultDriveID = "__default__"
+)
+
 func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
-	driveIDs := lo.Keys(app.drives)
-	if !app.drivesAutoDetect {
-		return driveIDs, nil
+	app.driveIDsMu.Lock()
+	defer app.driveIDsMu.Unlock()
+	if !app.driveIDsFetchedAt.IsZero() && flextime.Since(app.driveIDsFetchedAt) < 5*time.Minute {
+		return app.driveIDsCache, nil
 	}
-	if len(driveIDs) == 0 {
-		driveIDs = append(driveIDs, DefaultDriveID)
-	}
+	driveIDs := make([]string, 0, 1)
+	driveIDs = append(driveIDs, DefaultDriveID)
 	nextPageToken := "__initial__"
 	for nextPageToken != "" {
-		cell := app.driveSvc.Drives.List().PageSize(2).Context(ctx)
+		cell := app.driveSvc.Drives.List().PageSize(10).Context(ctx)
 		if nextPageToken != "__initial__" {
 			cell = cell.PageToken(nextPageToken)
 		}
@@ -202,7 +200,10 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 		}
 		nextPageToken = drivesListResp.NextPageToken
 	}
-	return lo.Uniq(driveIDs), nil
+	slices.Sort(driveIDs)
+	app.driveIDsCache = slices.Compact(driveIDs)
+	app.driveIDsFetchedAt = flextime.Now()
+	return app.driveIDsCache, nil
 }
 
 func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
