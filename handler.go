@@ -10,7 +10,7 @@ import (
 	logx "github.com/mashiike/go-logx"
 )
 
-func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	channelID := r.Header.Get("X-Goog-Channel-Id")
 	state := r.Header.Get("X-Goog-Resource-State")
@@ -94,6 +94,10 @@ func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, http.StatusText(http.StatusOK))
+}
+
+func (app *App) handleSync(w http.ResponseWriter, r *http.Request) {
+	// TODO: implement
 }
 
 func coalesce(strs ...string) string {

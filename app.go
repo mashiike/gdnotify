@@ -10,20 +10,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
-	"sync"
-	"text/template"
 	"time"
 
 	"github.com/Songmu/flextime"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	logx "github.com/mashiike/go-logx"
-	"github.com/mattn/go-shellwords"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
@@ -43,62 +39,7 @@ type App struct {
 	expiration         time.Duration
 	withinModifiedTime *time.Duration
 	webhookAddress     string
-}
-
-type RunOptions struct {
-	Mode         RunMode
-	LocalAddress string
-	CLICommand   CLICommand
-}
-
-func WithRunMode(mode string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		if m, err := RunModeString(mode); err != nil {
-			return err
-		} else {
-			opts.Mode = m
-		}
-		return nil
-	}
-}
-
-func WithLocalAddress(addr string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		opts.LocalAddress = addr
-		return nil
-	}
-}
-
-func WithCLICommand(cmd string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		if c, err := CLICommandString(cmd); err != nil {
-			return err
-		} else {
-			opts.CLICommand = c
-		}
-		return nil
-	}
-}
-
-func isLambda() bool {
-	if strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
-		return true
-	}
-	return false
-}
-
-func DefaultRunMode() RunMode {
-	if isLambda() {
-		return RunModeWebhook
-	}
-	return RunModeCLI
-}
-
-func newRunOptions() *RunOptions {
-	return &RunOptions{
-		Mode:         DefaultRunMode(),
-		LocalAddress: ":8080",
-	}
+	router             *mux.Router
 }
 
 func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
@@ -122,7 +63,6 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	}))
 
 	ctx := context.Background()
-
 	awsCfg, err := defaultAWSConfig(ctx)
 	if err != nil {
 		return nil, err
@@ -178,8 +118,15 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 		webhookAddress:     cfg.Webhook,
 		expiration:         cfg.Expiration,
 		withinModifiedTime: cfg.WithinModifiedTime,
+		router:             mux.NewRouter(),
 	}
+	app.setupRoute()
 	return app, nil
+}
+
+func (app *App) setupRoute() {
+	app.router.HandleFunc("/", app.handleWebhook)
+	app.router.HandleFunc("/sync", app.handleSync).Methods(http.MethodPost)
 }
 
 func (app *App) Close() error {
@@ -199,148 +146,21 @@ func (app *App) Close() error {
 	return eg.Wait()
 }
 
-func (app *App) Run(optFns ...func(*RunOptions) error) error {
-	return app.RunWithContext(context.Background(), optFns...)
-}
-
-func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) error) error {
-	opts := newRunOptions()
-	for _, optFn := range optFns {
-		if err := optFn(opts); err != nil {
-			return err
-		}
-	}
-	switch opts.Mode {
-	case RunModeWebhook:
-		logx.Println(ctx, "[info] run as webhook server")
-		return app.runAsWebhookServer(ctx, opts)
-	case RunModeMaintainer:
-		logx.Println(ctx, "[info] run as channel maintainer")
-		return app.runAsChannelMaintainer(ctx, opts)
-	case RunModeSyncer:
-		logx.Println(ctx, "[info] run as channel syncer")
-		return app.runAsChannelSyncer(ctx, opts)
-	case RunModeCLI:
-		logx.Println(ctx, "[info] run as CLI")
-		return app.runAsCLI(ctx, opts)
-	}
-
-	return errors.New("unknown run mode")
-}
-
-func (app *App) runAsWebhookServer(ctx context.Context, opts *RunOptions) error {
-	var wg sync.WaitGroup
-	if tunnelCmd := os.Getenv("HTTP_TUNNEL"); !isLambda() && tunnelCmd != "" {
-		logx.Println(ctx, "[info] set HTTP_TUNNEL detected")
-		var rendered string
-		if tmpl, err := template.New("tunnel").Parse(tunnelCmd); err != nil {
-			logx.Println(ctx, "[warn] failed HTTP_TUNNEL parse as go template: ", err)
-			rendered = tunnelCmd
-		} else {
-			var buf bytes.Buffer
-			if err := tmpl.Execute(&buf, map[string]interface{}{
-				"Address": opts.LocalAddress,
-			}); err != nil {
-				logx.Println(ctx, "[warn] failed HTTP_TUNNEL execute as go template: ", err)
-				rendered = tunnelCmd
-			} else {
-				rendered = buf.String()
-			}
-		}
-		args, err := shellwords.Parse(rendered)
-		if err != nil {
-			return fmt.Errorf("HTTP_TUNNEL parse failed: %w", err)
-		}
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		tunnelLogFilename := "tunnel.log"
-		fp, err := os.Create(tunnelLogFilename)
-		if err != nil {
-			return fmt.Errorf("can not create %s: %w", tunnelLogFilename, err)
-		}
-		defer fp.Close()
-		cmd.Stdout = fp
-		cmd.Stderr = fp
-		logx.Printf(ctx, "[info] output HTTP_TUNNEL log to `%s`", tunnelLogFilename)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := cmd.Run(); err != nil {
-				logx.Println(ctx, "[warn] tunnel command exit:", err)
-			}
-		}()
-	}
-	ridge.RunWithContext(ctx, opts.LocalAddress, "/", app)
-	wg.Wait()
-	return nil
-}
-
-func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error {
-	if isLambda() {
-		logx.Println(ctx, "[info] run on lambda")
-		lambda.StartWithOptions(func(ctx context.Context, event json.RawMessage) (interface{}, error) {
-			if err := app.maintenanceChannels(ctx, false); err != nil {
-				logx.Println(ctx, "[error] failed maintenance channels: ", err)
-				return nil, err
-			}
-			return map[string]interface{}{
-				"Status": 200,
-			}, nil
-		}, lambda.WithContext(ctx))
-		return nil
-	}
-	logx.Println(ctx, "[info] run on local")
-	return app.maintenanceChannels(ctx, false)
-}
-
-func (app *App) runAsChannelSyncer(ctx context.Context, _ *RunOptions) error {
-	if isLambda() {
-		logx.Println(ctx, "[info] run on lambda")
-		lambda.StartWithOptions(func(ctx context.Context) (interface{}, error) {
-			if err := app.syncChannels(ctx); err != nil {
-				logx.Println(ctx, "[error] failed sync channels: ", err)
-				return nil, err
-			}
-			return map[string]interface{}{
-				"Status": 200,
-			}, nil
-		}, lambda.WithContext(ctx))
-		return nil
-	}
-	logx.Println(ctx, "[info] run on local")
-	return app.syncChannels(ctx)
-}
-
-func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
-	if isLambda() {
-		return errors.New("run_mode is CLI, can not run on AWS Lambda")
-	}
-	switch opts.CLICommand {
-	case CLICommandList:
-		return app.listChannels(ctx, os.Stdout)
-	case CLICommandServe:
-		return app.runAsWebhookServer(ctx, opts)
-	case CLICommandRegister:
-		return app.maintenanceChannels(ctx, true)
-	case CLICommandMaintenance:
-		return app.maintenanceChannels(ctx, false)
-	case CLICommandCleanup:
-		return app.cleanupChannels(ctx)
-	case CLICommandSync:
-		return app.syncChannels(ctx)
-	default:
-		return fmt.Errorf("unknown cli command `%s`", opts.CLICommand)
-	}
-}
-
 func (app *App) List(ctx context.Context, _ ListOption) error {
 	return app.listChannels(ctx, os.Stdout)
 }
 
 func (app *App) Serve(ctx context.Context, o ServeOption) error {
-	return app.runAsWebhookServer(ctx, &RunOptions{
-		Mode:         RunModeWebhook,
-		LocalAddress: fmt.Sprintf(":%d", o.Port),
-	})
+	r := ridge.New(fmt.Sprintf(":%d", o.Port), "/", app.router)
+	r.RequestBuilder = func(event json.RawMessage) (*http.Request, error) {
+		req, err := ridge.NewRequest(event)
+		if err == nil && req.Method != "" && req.URL != nil && req.URL.Path != "" {
+			return req, nil
+		}
+		return http.NewRequest(http.MethodPost, "/sync", bytes.NewReader(event))
+	}
+	r.RunWithContext(ctx)
+	return nil
 }
 
 func (app *App) Register(ctx context.Context, _ RegisterOption) error {
