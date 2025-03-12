@@ -332,6 +332,32 @@ func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
 	}
 }
 
+func (app *App) List(ctx context.Context, _ ListOption) error {
+	return app.listChannels(ctx, os.Stdout)
+}
+
+func (app *App) Serve(ctx context.Context, o ServeOption) error {
+	return app.runAsWebhookServer(ctx, &RunOptions{
+		Mode:         RunModeWebhook,
+		LocalAddress: fmt.Sprintf(":%d", o.Port),
+	})
+}
+
+func (app *App) Register(ctx context.Context, _ RegisterOption) error {
+	return app.maintenanceChannels(ctx, true)
+}
+
+func (app *App) Cleanup(ctx context.Context, _ CleanupOption) error {
+	return app.cleanupChannels(ctx)
+}
+
+func (app *App) Sync(ctx context.Context, _ SyncOption) error {
+	if err := app.maintenanceChannels(ctx, false); err != nil {
+		return err
+	}
+	return app.syncChannels(ctx)
+}
+
 func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 	driveIDs := lo.Keys(app.drives)
 	if !app.drivesAutoDetect {
