@@ -19,6 +19,7 @@ type CLI struct {
 	LogFormat string           `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
 	LogColor  bool             `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
 	Version   kong.VersionFlag `help:"show version"`
+	Storage   StorageOption    `embed:"" prefix:"storage-"`
 
 	List     ListOption     `cmd:"" help:"list notification channels"`
 	Serve    ServeOption    `cmd:"" help:"serve webhook server" default:"true"`
@@ -100,7 +101,11 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err := cfg.Load(ctx, c.Config); err != nil {
 		return nil, err
 	}
-	return New(cfg)
+	storage, err := NewStorage(ctx, c.Storage)
+	if err != nil {
+		return nil, fmt.Errorf("create Storage: %w", err)
+	}
+	return New(cfg, storage)
 }
 
 var LevelNotice slog.Level = slog.LevelInfo + 2

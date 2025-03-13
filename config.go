@@ -26,26 +26,10 @@ type Config struct {
 
 	Webhook            string              `yaml:"webhook,omitempty"`
 	Expiration         time.Duration       `yaml:"expiration,omitempty"`
-	Storage            *StorageConfig      `yaml:"storage,omitempty"`
 	Notification       *NotificationConfig `yaml:"notification,omitempty"`
 	WithinModifiedTime *time.Duration      `yaml:"within_modified_time,omitempty"`
 
 	versionConstraints gv.Constraints `yaml:"version_constraints,omitempty"`
-}
-
-type StorageType int
-
-//go:generate enumer -type=StorageType -yaml -trimprefix StorageType -output storage_type_enumer.gen.go
-const (
-	StorageTypeDynamoDB StorageType = iota
-	StorageTypeFile
-)
-
-type StorageConfig struct {
-	Type      StorageType `yaml:"type,omitempty"`
-	TableName *string     `yaml:"table_name,omitempty"`
-	DataFile  *string     `yaml:"data_file,omitempty"`
-	LockFile  *string     `yaml:"lock_file,omitempty"`
 }
 
 type NotificationType int
@@ -65,10 +49,6 @@ type NotificationConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Expiration: 7 * 24 * time.Hour,
-		Storage: &StorageConfig{
-			Type:      StorageTypeDynamoDB,
-			TableName: aws.String("gdnotify"),
-		},
 		Notification: &NotificationConfig{
 			Type:     NotificationTypeEventBridge,
 			EventBus: aws.String("default"),
@@ -159,49 +139,11 @@ func (cfg *Config) Restrict() error {
 	if cfg.Webhook == "" {
 		log.Println("[warn] webhook is required, if run_mode is maintainer")
 	}
-	if cfg.Storage == nil {
-		return errors.New("storage does not configured")
-	}
 	if cfg.Notification == nil {
 		return errors.New("notification does not configured")
 	}
-	if err := cfg.Storage.Restrict(); err != nil {
-		return fmt.Errorf("storage:%w", err)
-	}
 	if err := cfg.Notification.Restrict(); err != nil {
 		return fmt.Errorf("notification:%w", err)
-	}
-	return nil
-}
-
-// Restrict restricts a configuration.
-func (cfg *StorageConfig) Restrict() error {
-	if !cfg.Type.IsAStorageType() {
-		return errors.New("invalid storage type")
-	}
-	switch cfg.Type {
-	case StorageTypeDynamoDB:
-		return cfg.restrictDynamoDB()
-	case StorageTypeFile:
-		return cfg.restrictFile()
-	default:
-		return errors.New("unknown storage type")
-	}
-}
-
-func (cfg *StorageConfig) restrictDynamoDB() error {
-	if cfg.TableName == nil || *cfg.TableName == "" {
-		return errors.New("table_name is required, if type is DynamoDB")
-	}
-	return nil
-}
-
-func (cfg *StorageConfig) restrictFile() error {
-	if cfg.DataFile == nil || *cfg.DataFile == "" {
-		return errors.New("file_path is required, if type is File")
-	}
-	if cfg.LockFile == nil || *cfg.LockFile == "" {
-		cfg.LockFile = aws.String("/tmp/gdnotify_file_storage.lock")
 	}
 	return nil
 }

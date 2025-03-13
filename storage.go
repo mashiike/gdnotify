@@ -22,6 +22,14 @@ import (
 	"github.com/shogo82148/go-retry"
 )
 
+type StorageOption struct {
+	Type       string `help:"storage type" default:"dynamodb" enum:"dynamodb,file" env:"GDNOTIFY_STORAGE_TYPE"`
+	TableName  string `help:"dynamodb table name" default:"gdnotify" env:"GDNOTIFY_DDB_TABLE_NAME"`
+	AutoCreate bool   `help:"auto create dynamodb table" default:"false" env:"GDNOTIFY_DDB_AUTO_CREATE" negatable:""`
+	DataFile   string `help:"file storage data file" default:"gdnotify.dat" env:"GDNOTIFY_FILE_STORAGE_DATA_FILE"`
+	LockFile   string `help:"file storage lock file" default:"gdnotify.lock" env:"GDNOTIFY_FILE_STORAGE_LOCK_FILE"`
+}
+
 type ChannelItem struct {
 	ChannelID          string
 	Expiration         time.Time
@@ -157,14 +165,14 @@ func (err *ChannelAlreadyExists) Error() string {
 	return fmt.Sprintf("channel_id:%s already exists", err.ChannelID)
 }
 
-func NewStorage(ctx context.Context, cfg *StorageConfig) (Storage, func() error, error) {
+func NewStorage(ctx context.Context, cfg StorageOption) (Storage, error) {
 	switch cfg.Type {
-	case StorageTypeDynamoDB:
+	case "dynamodb":
 		return NewDynamoDBStorage(ctx, cfg)
-	case StorageTypeFile:
+	case "file":
 		return NewFileStorage(ctx, cfg)
 	}
-	return nil, nil, errors.New("unknown storage type")
+	return nil, errors.New("unknown storage type")
 }
 
 type DynamoDBStorage struct {
@@ -172,27 +180,31 @@ type DynamoDBStorage struct {
 	tableName string
 }
 
-func NewDynamoDBStorage(ctx context.Context, cfg *StorageConfig) (*DynamoDBStorage, func() error, error) {
+func NewDynamoDBStorage(ctx context.Context, cfg StorageOption) (*DynamoDBStorage, error) {
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	s := &DynamoDBStorage{
 		client:    dynamodb.NewFromConfig(awsCfg),
-		tableName: *cfg.TableName,
+		tableName: cfg.TableName,
 	}
 	logx.Printf(ctx, "[info] check describe dynamodb table `%s`", s.tableName)
 	exists, err := s.tableExists(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	if !exists {
+	if !exists && cfg.AutoCreate {
 		if err := s.createTable(ctx); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
-	return s, nil, nil
+	return s, nil
+}
+
+func (s *DynamoDBStorage) Close() error {
+	return nil
 }
 
 func (s *DynamoDBStorage) tableExists(ctx context.Context) (bool, error) {
@@ -423,13 +435,13 @@ type FileStorage struct {
 	FilePath string
 }
 
-func NewFileStorage(ctx context.Context, cfg *StorageConfig) (*FileStorage, func() error, error) {
+func NewFileStorage(ctx context.Context, cfg StorageOption) (*FileStorage, error) {
 	s := &FileStorage{
-		FilePath: *cfg.DataFile,
-		LockFile: *cfg.LockFile,
+		FilePath: cfg.DataFile,
+		LockFile: cfg.LockFile,
 	}
 
-	return s, nil, nil
+	return s, nil
 }
 
 func (s *FileStorage) FindAllChannels(ctx context.Context) (<-chan []*ChannelItem, error) {

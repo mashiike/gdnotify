@@ -67,16 +67,11 @@ func SetAWSConfig(cfg aws.Config) {
 	awsCfg = &cfg
 }
 
-func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
+func New(cfg *Config, storage Storage, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
-
 	cleanupFns := make([]func() error, 0)
-	storage, cleanup, err := NewStorage(ctx, cfg.Storage)
-	if err != nil {
-		return nil, fmt.Errorf("create Storage: %w", err)
-	}
-	if cleanup != nil {
-		cleanupFns = append(cleanupFns, cleanup)
+	if closer, ok := storage.(io.Closer); ok {
+		cleanupFns = append(cleanupFns, closer.Close)
 	}
 	notification, cleanup, err := NewNotification(ctx, cfg.Notification)
 	if err != nil {
