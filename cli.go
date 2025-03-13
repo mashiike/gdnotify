@@ -21,6 +21,7 @@ type CLI struct {
 	Version       kong.VersionFlag   `help:"show version"`
 	Storage       StorageOption      `embed:"" prefix:"storage-"`
 	Nootification NotificationOption `embed:"" prefix:"notification-"`
+	AppOption     `embed:""`
 
 	List     ListOption     `cmd:"" help:"list notification channels"`
 	Serve    ServeOption    `cmd:"" help:"serve webhook server" default:"true"`
@@ -98,10 +99,6 @@ func (c *CLI) run(ctx context.Context, k *kong.Context, logger *slog.Logger) err
 }
 
 func (c *CLI) newApp(ctx context.Context) (*App, error) {
-	cfg := DefaultConfig()
-	if err := cfg.Load(ctx, c.Config); err != nil {
-		return nil, err
-	}
 	storage, err := NewStorage(ctx, c.Storage)
 	if err != nil {
 		return nil, fmt.Errorf("create Storage: %w", err)
@@ -110,7 +107,7 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
-	return New(cfg, storage, notification)
+	return New(c.AppOption, storage, notification)
 }
 
 var LevelNotice slog.Level = slog.LevelInfo + 2

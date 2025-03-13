@@ -67,6 +67,12 @@ func SetAWSConfig(cfg aws.Config) {
 	awsCfg = &cfg
 }
 
+type AppOption struct {
+	Webhook            string         `help:"webhook address" default:"" env:"GDNOTIFY_WEBHOOK"`
+	Expiration         time.Duration  `help:"channel expiration" default:"168h" env:"GDNOTIFY_EXPIRATION"`
+	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." default:"" env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
+}
+
 func New(cfg *Config, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
 	cleanupFns := make([]func() error, 0)
