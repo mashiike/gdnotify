@@ -13,7 +13,8 @@ import (
 
 func TestChangeEventDetailMarshalJSON(t *testing.T) {
 	g := goldie.New(t,
-		goldie.WithFixtureDir("./testdata/golden"),
+		goldie.WithFixtureDir("./testdata"),
+		goldie.WithNameSuffix(".golden.json"),
 	)
 	cases := []struct {
 		name        string

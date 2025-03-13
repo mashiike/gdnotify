@@ -1,0 +1,21 @@
+{
+  "subject": "FileID XXXXXXXXXX was removed at 2022-06-15T00:03:55.849Z",
+  "entity": {
+    "id": "XXXXXXXXXX",
+    "kind": "drive#file",
+    "name": "",
+    "createdTime": ""
+  },
+  "actor": {
+    "displayName": "Unknown User",
+    "emailAddress": "",
+    "kind": "drive#user"
+  },
+  "change": {
+    "changeType": "file",
+    "fileId": "XXXXXXXXXX",
+    "kind": "drive#change",
+    "removed": true,
+    "time": "2022-06-15T00:03:55.849Z"
+  }
+}
