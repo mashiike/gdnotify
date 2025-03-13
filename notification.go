@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/Songmu/flextime"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
-	logx "github.com/mashiike/go-logx"
-	"github.com/samber/lo"
 	"google.golang.org/api/drive/v3"
 )
 
@@ -199,11 +199,10 @@ func (e *ChangeEventDetail) Source(sourcePrefix string) string {
 
 func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	sourcePrefix := fmt.Sprintf("oss.gdnotify/%s", item.DriveID)
-	entriesChunk := lo.Chunk(lo.Map(changes, func(c *drive.Change, _ int) types.PutEventsRequestEntry {
-
+	convertor := func(c *drive.Change) types.PutEventsRequestEntry {
 		t, err := time.Parse(time.RFC3339Nano, c.Time)
 		if err != nil {
-			logx.Printf(ctx, "[warn] time Parse failed `%s`: %s", c.Time, err.Error())
+			slog.WarnContext(ctx, "time Parse failed", "time", c.Time, "error", err)
 			t = flextime.Now()
 		}
 		ced := &ChangeEventDetail{
@@ -211,13 +210,13 @@ func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *Channel
 		}
 		bs, err := json.Marshal(ced)
 		if err != nil {
-			logx.Printf(ctx, "[warn] change marshal failed: %s", err.Error())
+			slog.WarnContext(ctx, "change marshal failed", "error", err)
 			bs = []byte("{}")
 		}
 		detail := string(bs)
 		source := ced.Source(sourcePrefix)
 		detailType := ced.DetailType()
-		logx.Printf(ctx, "[debug] event source=%s, detail-type=%s detail: %s", source, detailType, detail)
+		slog.DebugContext(ctx, "event", "source", source, "detail-type", detailType, "detail", detail)
 		return types.PutEventsRequestEntry{
 			EventBusName: aws.String(n.eventBus),
 			Resources:    []string{},
@@ -226,25 +225,25 @@ func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *Channel
 			Time:         aws.Time(t),
 			Detail:       aws.String(detail),
 		}
-	}), 10)
+	}
 	var lastErr error
-	for _, entries := range entriesChunk {
+	for entries := range slices.Chunk(Map(changes, convertor), 10) {
 		output, err := n.client.PutEvents(ctx, &eventbridge.PutEventsInput{
 			Entries: entries,
 		})
 		if err != nil {
-			logx.Printf(ctx, "[error] PutEvents failed: %s", err.Error())
+			slog.ErrorContext(ctx, "PutEvents failed", "error", err)
 			lastErr = err
 			continue
 		}
 		for i, entry := range output.Entries {
 			if entry.ErrorCode != nil {
-				logx.Printf(ctx, "[error] put event to %s error_code=%s, error_message=%s detail=%s", n.eventBus, *entry.ErrorCode, *entry.ErrorMessage, *entries[i].Detail)
+				slog.ErrorContext(ctx, "put event error", "event_bus", n.eventBus, "error_code", *entry.ErrorCode, "error_message", *entry.ErrorMessage, "detail", *entries[i].Detail)
 				lastErr = fmt.Errorf("put events failed error_code=%s, error_message=%s", *entry.ErrorCode, *entry.ErrorMessage)
 				continue
 			}
 			if entry.EventId != nil {
-				logx.Printf(ctx, "[info] put event to %s event_id=%s", n.eventBus, *entry.EventId)
+				slog.InfoContext(ctx, "put event", "event_bus", n.eventBus, "event_id", *entry.EventId)
 				continue
 			}
 		}
@@ -266,23 +265,18 @@ func NewFileNotification(ctx context.Context, cfg NotificationOption) (*FileNoti
 func (n *FileNotification) SendChanges(ctx context.Context, _ *ChannelItem, changes []*drive.Change) error {
 	fp, err := os.OpenFile(n.eventFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		logx.Printf(ctx, "[debug] can not crate notification event_file=%s:%s", n.eventFile, err.Error())
+		slog.DebugContext(ctx, "can not create notification event file", "event_file", n.eventFile, "error", err)
 		return err
 	}
 	defer fp.Close()
 	encoder := json.NewEncoder(fp)
-	logx.Printf(ctx, "[info] output Changes events to `%s`", n.eventFile)
+	slog.InfoContext(ctx, "output Changes events", "event_file", n.eventFile)
 	var lastErr error
 	for _, change := range changes {
-		logx.Printf(ctx, "[debug] output changes event change_type:%s kind:%s file_id:%s drive_id:%s",
-			coalesce(change.ChangeType, "-"),
-			coalesce(change.Kind, "-"),
-			coalesce(change.FileId, "-"),
-			coalesce(change.DriveId, "-"),
-		)
+		slog.DebugContext(ctx, "output changes event", "change_type", coalesce(change.ChangeType, "-"), "kind", coalesce(change.Kind, "-"), "file_id", coalesce(change.FileId, "-"), "drive_id", coalesce(change.DriveId, "-"))
 		if err := encoder.Encode(change); err != nil {
 			lastErr = err
-			logx.Printf(ctx, "[warn] FileNotification.SendChanges :%s", err.Error())
+			slog.WarnContext(ctx, "FileNotification.SendChanges", "error", err)
 		}
 	}
 	return lastErr

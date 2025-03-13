@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -21,7 +21,6 @@ import (
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	logx "github.com/mashiike/go-logx"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
@@ -96,7 +95,7 @@ func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...o
 	}
 
 	rotateRemaining := time.Duration(0.2 * float64(cfg.Expiration))
-	log.Printf("[debug] cfg.Expiration=%s 20%% rotateRemaining=%s", cfg.Expiration, rotateRemaining)
+	slog.DebugContext(ctx, "cfg.Expiration and rotateRemaining", "cfg.Expiration", cfg.Expiration, "rotateRemaining", rotateRemaining)
 
 	app := &App{
 		storage:            storage,
@@ -118,12 +117,12 @@ func (app *App) Close() error {
 	for i, cleanup := range app.cleanupFns {
 		_i, _cleanup := i, cleanup
 		eg.Go(func() error {
-			logx.Printf(ctx, "[debug][%d] start cleanup", _i)
+			slog.DebugContext(ctx, "start cleanup", "index", _i)
 			if err := _cleanup(); err != nil {
-				logx.Printf(ctx, "[debug][%d] error cleanup: %s", _i, err.Error())
+				slog.DebugContext(ctx, "error cleanup", "index", _i, "error", err)
 				return err
 			}
-			logx.Printf(ctx, "[debug][%d] end cleanup", _i)
+			slog.DebugContext(ctx, "end cleanup", "index", _i)
 			return nil
 		})
 	}
@@ -197,7 +196,7 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 			return nil, fmt.Errorf("access Drives::list %w", err)
 		}
 		for _, driveResp := range drivesListResp.Drives {
-			log.Printf("[info] auto detect `%s (%s)`", driveResp.Id, driveResp.Name)
+			slog.InfoContext(ctx, "auto detect", "id", driveResp.Id, "name", driveResp.Name)
 			driveIDs = append(driveIDs, driveResp.Id)
 		}
 		nextPageToken = drivesListResp.NextPageToken
@@ -229,10 +228,7 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 	channelsByDriveID := make(map[string][]*ChannelItem, len(existsDriveIDs))
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration, "created_at", item.CreatedAt)
 			existsDriveIDs[item.DriveID] = true
 			channels, ok := channelsByDriveID[item.DriveID]
 			if !ok {
@@ -249,9 +245,9 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 		}
 		_driveID := driveID
 		egForNew.Go(func() error {
-			logx.Printf(egCtxForNew, "[info] channel not exist drive_id=%s, try create channel", _driveID)
+			slog.InfoContext(egCtxForNew, "channel not exist, try create channel", "drive_id", _driveID)
 			if err := app.CreateChannel(egCtxForNew, _driveID); err != nil {
-				logx.Printf(egCtxForNew, "[error] failed CreateChannel drive_id=%s", _driveID)
+				slog.ErrorContext(egCtxForNew, "failed CreateChannel", "drive_id", _driveID, "error", err)
 				return fmt.Errorf("CreateChannel:%w", err)
 			}
 			return nil
@@ -273,7 +269,7 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 			continue
 		}
 		egForRotate.Go(func() error {
-			logx.Printf(egCtxForRotate, "[info] try rotation drive_id=%s", _driveID)
+			slog.InfoContext(egCtxForRotate, "try rotation", "drive_id", _driveID)
 			if len(rotationTargets) == 0 {
 				return nil
 			}
@@ -285,7 +281,7 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 			}
 			for _, cannel := range rotationTargets[1:] {
 				if err := app.DeleteChannel(egCtxForRotate, cannel); err != nil {
-					logx.Printf(egCtxForRotate, "[warn] cleanup failed drive_id=%s, channel_id=%s, resource_id=%s", _driveID, cannel.ChannelID, cannel.ResourceID)
+					slog.WarnContext(egCtxForRotate, "cleanup failed", "drive_id", _driveID, "channel_id", cannel.ChannelID, "resource_id", cannel.ResourceID)
 				}
 			}
 			return nil
@@ -320,11 +316,11 @@ func (app *App) getStartPageToken(ctx context.Context, driveID string) (string, 
 	}
 	token, err := getStartPageTokenCell.Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API changes:getStartPageToken failed:", err)
+		slog.DebugContext(ctx, "drive API changes:getStartPageToken failed", "error", err)
 		return "", fmt.Errorf("drive API changes:getStartPageToken:%w", err)
 	}
 	if token.HTTPStatusCode != http.StatusOK {
-		logx.Printf(ctx, "[debug] drive API changes:getStartPageToken response status not ok (status:%d)", token.HTTPStatusCode)
+		slog.DebugContext(ctx, "drive API changes:getStartPageToken response status not ok", "status", token.HTTPStatusCode)
 		return "", fmt.Errorf("drive API changes:getStartPageToken response status not ok (status:%d)", token.HTTPStatusCode)
 	}
 	return token.StartPageToken, nil
@@ -333,7 +329,7 @@ func (app *App) getStartPageToken(ctx context.Context, driveID string) (string, 
 func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 	uuidObj, err := uuid.NewRandom()
 	if err != nil {
-		logx.Println(ctx, "[debug] create new uuid v4: ", err)
+		slog.DebugContext(ctx, "create new uuid v4 failed", "error", err)
 		return fmt.Errorf(" create new uuid v4: %w", err)
 	}
 	now := flextime.Now()
@@ -357,20 +353,18 @@ func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 	}
 	resp, err := watchCall.Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API changes:watch failed:", err)
+		slog.DebugContext(ctx, "drive API changes:watch failed", "error", err)
 		return fmt.Errorf("drive API changes:watch:%w", err)
 	}
 	if err != nil {
-		logx.Printf(ctx, "[debug] drive API changes:watch response status not ok (status:%d)", resp.HTTPStatusCode)
+		slog.DebugContext(ctx, "drive API changes:watch response status not ok", "status", resp.HTTPStatusCode)
 		return fmt.Errorf("drive API changes:watch response status not ok (status:%d)", resp.HTTPStatusCode)
 	}
 	item.ResourceID = resp.ResourceId
 	item.Expiration = time.UnixMilli(resp.Expiration)
-	logx.Printf(ctx, "[info] create channel id=%s, resource_id=%s, drive_id=%s page_token=%s, resource_uri=%s, expiration=%s",
-		resp.Id, resp.ResourceId, item.DriveID, item.PageToken, resp.ResourceUri, item.Expiration,
-	)
+	slog.InfoContext(ctx, "create channel", "id", resp.Id, "resource_id", resp.ResourceId, "drive_id", item.DriveID, "page_token", item.PageToken, "resource_uri", resp.ResourceUri, "expiration", item.Expiration)
 	if err := app.storage.SaveChannel(ctx, item); err != nil {
-		logx.Println(ctx, "[debug] save channel failed", err)
+		slog.DebugContext(ctx, "save channel failed", "error", err)
 		return fmt.Errorf("save channel:%w", err)
 	}
 	return nil
@@ -408,18 +402,12 @@ func (app *App) cleanupChannels(ctx context.Context) error {
 	}
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 			if err := app.DeleteChannel(ctx, item); err != nil {
-				logx.Printf(ctx, "[warn] failed DeleteChannel channel_id=%s, resource_id=%s, drive_id=%s", item.ChannelID, item.ResourceID, item.DriveID)
+				slog.WarnContext(ctx, "failed DeleteChannel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 				continue
 			}
-			logx.Printf(ctx,
-				"[info] deleted channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "deleted channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 		}
 	}
 	return nil
@@ -432,39 +420,22 @@ func (app *App) syncChannels(ctx context.Context) error {
 	}
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 			changes, _, err := app.changesList(ctx, item)
 			if err != nil {
-				logx.Printf(ctx, "[warn] failed sync channel_id=%s, resource_id=%s, drive_id=%s", item.ChannelID, item.ResourceID, item.DriveID)
+				slog.WarnContext(ctx, "failed sync", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 				continue
 			}
 			if err != nil {
-				logx.Printf(ctx, "[warn] get changes list failed channel_id:%s resource_id:%s err:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-					err.Error(),
-				)
+				slog.WarnContext(ctx, "get changes list failed", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"), "error", err.Error())
 			}
 			if len(changes) > 0 {
-				logx.Printf(ctx, "[debug] send changes channel_id:%s resource_id:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-				)
+				slog.DebugContext(ctx, "send changes", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"))
 				if err := app.SendNotification(ctx, item, changes); err != nil {
-					logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
-						coalesce(item.ChannelID, "-"),
-						coalesce(item.ResourceID, "-"),
-						err.Error(),
-					)
+					slog.ErrorContext(ctx, "send changes failed", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"), "error", err.Error())
 				}
 			} else {
-				logx.Printf(ctx, "[debug] no changes channel_id:%s resource_id:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-				)
+				slog.DebugContext(ctx, "no changes", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"))
 			}
 		}
 	}
@@ -472,15 +443,13 @@ func (app *App) syncChannels(ctx context.Context) error {
 }
 
 func (app *App) DeleteChannel(ctx context.Context, item *ChannelItem) error {
-	logx.Printf(ctx, "[info] delete channel id=%s, resource_id=%s, drive_id=%s page_token=%s",
-		item.ChannelID, item.ResourceID, item.DriveID, item.PageToken,
-	)
+	slog.InfoContext(ctx, "delete channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "page_token", item.PageToken)
 	err := app.driveSvc.Channels.Stop(&drive.Channel{
 		Id:         item.ChannelID,
 		ResourceId: item.ResourceID,
 	}).Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API channels:stop failed:", err)
+		slog.DebugContext(ctx, "drive API channels:stop failed", "error", err)
 		var apiError *googleapi.Error
 		if !errors.As(err, &apiError) {
 			return fmt.Errorf("drive API channels:stop:%w", err)
@@ -488,12 +457,10 @@ func (app *App) DeleteChannel(ctx context.Context, item *ChannelItem) error {
 		if apiError.Code != http.StatusNotFound {
 			return fmt.Errorf("drive API channels:stop:%w", apiError)
 		}
-		logx.Printf(ctx, "[warn] channel is already stopped continue and storage try delete: channel id=%s, resource_id=%s, drive_id=%s",
-			item.ChannelID, item.ResourceID, item.DriveID,
-		)
+		slog.WarnContext(ctx, "channel is already stopped, continue and storage try delete", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	}
 	if err := app.storage.DeleteChannel(ctx, item); err != nil {
-		logx.Println(ctx, "[debug] delete channel failed", err)
+		slog.DebugContext(ctx, "delete channel failed", "error", err)
 		return fmt.Errorf("delete channel:%w", err)
 	}
 	return nil
@@ -504,41 +471,27 @@ const (
 )
 
 func (app *App) RotateChannel(ctx context.Context, item *ChannelItem) error {
-	logx.Printf(ctx, "[info] try rotate channel channel id=%s, resource_id=%s, drive_id=%s",
-		item.ChannelID, item.ResourceID, item.DriveID,
-	)
+	slog.InfoContext(ctx, "try rotate channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	newItem := *item
 	now := flextime.Now()
 	if now.Sub(item.PageTokenFetchedAt) >= pageTokenRefreshIntervalDays*24*time.Hour {
-		logx.Printf(ctx, "[info] 90 days have passed since the first acquisition of the PageToken, so try to re-acquire the PageToken: channel id=%s, resource_id=%s, drive_id=%s",
-			item.ChannelID, item.ResourceID, item.DriveID,
-		)
+		slog.InfoContext(ctx, "90 days have passed since the first acquisition of the PageToken, so try to re-acquire the PageToken", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 		token, err := app.getStartPageToken(ctx, item.DriveID)
 		if err != nil {
-			logx.Printf(ctx, "[error] re-acquire the PageToken failed: channel id=%s, resource_id=%s, drive_id=%s: %s",
-				item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-			)
-			logx.Printf(ctx, "[warn] PageToken is out of date and attempts to rotate: channel id=%s, resource_id=%s, drive_id=%s",
-				item.ChannelID, item.ResourceID, item.DriveID,
-			)
+			slog.ErrorContext(ctx, "re-acquire the PageToken failed", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
+			slog.WarnContext(ctx, "PageToken is out of date and attempts to rotate", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 		} else {
 			newItem.PageToken = token
 			newItem.PageTokenFetchedAt = now
 		}
 	}
 	if err := app.createChannel(ctx, &newItem); err != nil {
-		logx.Printf(ctx, "[error] failed rotate channel id=%s, resource_id=%s, drive_id=%s: %s",
-			item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-		)
+		slog.ErrorContext(ctx, "failed rotate channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 		return err
 	}
-	logx.Printf(ctx, "[info] success rotate channel old_channel_id=%s, new_channel_id=%s, drive_id=%s",
-		item.ChannelID, newItem.ChannelID, item.DriveID,
-	)
+	slog.InfoContext(ctx, "success rotate channel", "old_channel_id", item.ChannelID, "new_channel_id", newItem.ChannelID, "drive_id", item.DriveID)
 	if err := app.DeleteChannel(ctx, item); err != nil {
-		logx.Printf(ctx, "[error] failed delete old channel id=%s, resource_id=%s, drive_id=%s: %s",
-			item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-		)
+		slog.ErrorContext(ctx, "failed delete old channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 		return err
 	}
 	return nil
@@ -558,16 +511,14 @@ var changesFields = fmt.Sprintf("changes(%s)", strings.Join(
 ))
 
 func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Change, *ChannelItem, error) {
-	logx.Printf(ctx, "[debug] try FindOneByChannelID  channel id=%s", channelID)
+	slog.DebugContext(ctx, "try FindOneByChannelID", "channel_id", channelID)
 	item, err := app.storage.FindOneByChannelID(ctx, channelID)
-	logx.Printf(ctx, "[debug] finish FindOneByChannelID  channel id=%s err=%#v", channelID, err)
+	slog.DebugContext(ctx, "finish FindOneByChannelID", "channel_id", channelID, "error", err)
 	if err != nil {
-		logx.Printf(ctx, "[debug] failed FindOneByChannelID channel_id=%s err=%s", channelID, err.Error())
+		slog.DebugContext(ctx, "failed FindOneByChannelID", "channel_id", channelID, "error", err)
 		return nil, nil, err
 	}
-	logx.Printf(ctx, "[debug] try change list channel id=%s, resource_id=%s, drive_id=%s",
-		item.ChannelID, item.ResourceID, item.DriveID,
-	)
+	slog.DebugContext(ctx, "try change list", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	return app.changesList(ctx, item)
 }
 
@@ -586,18 +537,16 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 			call = call.DriveId(item.DriveID)
 		}
 		changeList, err := call.Context(ctx).Do()
-		logx.Printf(ctx, "[debug] try Drive API changes:list: channel_id=%s drive_id=%s page_token=%s", item.ChannelID, item.DriveID, pageToken)
+		slog.DebugContext(ctx, "Drive API changes:list", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken)
 		if err != nil {
-			logx.Printf(ctx, "[debug] failed Drive API changes:list channel id=%s, resource_id=%s, drive_id=%s: %s",
-				item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-			)
+			slog.DebugContext(ctx, "Drive API changes:list failed", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 			return err
 		}
-		logx.Printf(ctx, "[debug] success Drive API changes:list: channel_id=%s drive_id=%s, pageToken=%s changes=%d", item.ChannelID, item.DriveID, pageToken, len(changeList.Changes))
+		slog.DebugContext(ctx, "Drive API changes:list success", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken, "changes", len(changeList.Changes))
 		changes = append(changes, changeList.Changes...)
 		nextPageToken = changeList.NextPageToken
 		newStartPageToken = changeList.NewStartPageToken
-		logx.Printf(ctx, "[debug] Drive API changes:list: channel_id=%s drive_id=%s, next_page_token=%s  new_start_page_token=%s", item.ChannelID, item.DriveID, pageToken, newStartPageToken)
+		slog.DebugContext(ctx, "Drive API changes:list", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken, "next_page_token", newStartPageToken)
 		return nil
 	}
 	if err := process(ctx, item.PageToken); err != nil {
@@ -609,7 +558,7 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 			return nil, nil, err
 		}
 	}
-	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", item.ChannelID, item.PageToken, newStartPageToken)
+	slog.InfoContext(ctx, "PageToken refresh", "channel_id", item.ChannelID, "old_page_token", item.PageToken, "new_page_token", newStartPageToken)
 	newItem := *item
 	newItem.PageToken = newStartPageToken
 	newItem.UpdatedAt = flextime.Now()
@@ -620,12 +569,12 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 }
 
 func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
-	logx.Printf(ctx, "[debug] send notification for channel %s", item.ChannelID)
+	slog.DebugContext(ctx, "send notification for channel", "channel_id", item.ChannelID)
 	if app.withinModifiedTime == nil {
-		logx.Printf(ctx, "[debug] no filter send for %s", item.ChannelID)
+		slog.DebugContext(ctx, "no filter send", "channel_id", item.ChannelID)
 		return app.notification.SendChanges(ctx, item, changes)
 	}
-	logx.Printf(ctx, "[debug] try filter %s", item.ChannelID)
+	slog.DebugContext(ctx, "try filter", "channel_id", item.ChannelID)
 	now := time.Now()
 	filterd := make([]*drive.Change, 0, len(changes))
 	for _, change := range changes {
@@ -633,14 +582,14 @@ func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes
 			filterd = append(filterd, change)
 			continue
 		}
-		logx.Printf(ctx, "[debug] try check modified time: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+		slog.DebugContext(ctx, "try check modified time", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 		t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
 		if err != nil {
 			filterd = append(filterd, change)
 			continue
 		}
 		if now.Sub(t) > *app.withinModifiedTime {
-			logx.Printf(ctx, "[info] filterd changes item: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+			slog.InfoContext(ctx, "filtered changes item", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 			continue
 		}
 		filterd = append(filterd, change)

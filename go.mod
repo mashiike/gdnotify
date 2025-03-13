@@ -1,6 +1,6 @@
 module github.com/mashiike/gdnotify
 
-go 1.24.0
+go 1.24
 
 require (
 	github.com/Songmu/flextime v0.1.0
@@ -16,7 +16,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mashiike/gcreds4aws v0.1.2
-	github.com/mashiike/go-logx v0.0.0
 	github.com/mashiike/sloglevel v0.1.0
 	github.com/mashiike/slogutils v0.4.0
 	github.com/najeira/randstr v0.1.1
