@@ -14,12 +14,13 @@ import (
 )
 
 type CLI struct {
-	Config    string           `help:"config file path" default:"gdnotify.yaml" env:"GDNOTIFY_CONFIG"`
-	LogLevel  string           `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
-	LogFormat string           `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
-	LogColor  bool             `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
-	Version   kong.VersionFlag `help:"show version"`
-	Storage   StorageOption    `embed:"" prefix:"storage-"`
+	Config        string             `help:"config file path" default:"gdnotify.yaml" env:"GDNOTIFY_CONFIG"`
+	LogLevel      string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
+	LogFormat     string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
+	LogColor      bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
+	Version       kong.VersionFlag   `help:"show version"`
+	Storage       StorageOption      `embed:"" prefix:"storage-"`
+	Nootification NotificationOption `embed:"" prefix:"notification-"`
 
 	List     ListOption     `cmd:"" help:"list notification channels"`
 	Serve    ServeOption    `cmd:"" help:"serve webhook server" default:"true"`
@@ -105,7 +106,11 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Storage: %w", err)
 	}
-	return New(cfg, storage)
+	notification, err := NewNotification(ctx, c.Nootification)
+	if err != nil {
+		return nil, fmt.Errorf("create Notification: %w", err)
+	}
+	return New(cfg, storage, notification)
 }
 
 var LevelNotice slog.Level = slog.LevelInfo + 2

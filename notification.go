@@ -17,18 +17,24 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
+type NotificationOption struct {
+	Type      string `help:"notification type" default:"eventbridge" enum:"eventbridge,file" env:"GDNOTIFY_NOTIFICATION_TYPE"`
+	EventBus  string `help:"event bus name (eventbridge type only)" default:"default" env:"GDNOTIFY_EVENTBRIDGE_EVENT_BUS"`
+	EventFile string `help:"event file path (file type only)" default:"gdnotify.json" env:"GDNOTIFY_EVENT_FILE"`
+}
+
 type Notification interface {
 	SendChanges(context.Context, *ChannelItem, []*drive.Change) error
 }
 
-func NewNotification(ctx context.Context, cfg *NotificationConfig) (Notification, func() error, error) {
+func NewNotification(ctx context.Context, cfg NotificationOption) (Notification, error) {
 	switch cfg.Type {
-	case NotificationTypeEventBridge:
+	case "eventbridge":
 		return NewEventBridgeNotification(ctx, cfg)
-	case NotificationTypeFile:
+	case "file":
 		return NewFileNotification(ctx, cfg)
 	}
-	return nil, nil, errors.New("unknown storage type")
+	return nil, errors.New("unknown storage type")
 }
 
 type EventBridgeClient interface {
@@ -40,16 +46,16 @@ type EventBridgeNotification struct {
 	eventBus string
 }
 
-func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig) (Notification, func() error, error) {
+func NewEventBridgeNotification(ctx context.Context, cfg NotificationOption) (Notification, error) {
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	n := &EventBridgeNotification{
 		client:   eventbridge.NewFromConfig(awsCfg),
-		eventBus: *cfg.EventBus,
+		eventBus: cfg.EventBus,
 	}
-	return n, nil, nil
+	return n, nil
 }
 
 type TargetEntity struct {
@@ -250,11 +256,11 @@ type FileNotification struct {
 	eventFile string
 }
 
-func NewFileNotification(ctx context.Context, cfg *NotificationConfig) (*FileNotification, func() error, error) {
+func NewFileNotification(ctx context.Context, cfg NotificationOption) (*FileNotification, error) {
 	n := &FileNotification{
-		eventFile: *cfg.EventFile,
+		eventFile: cfg.EventFile,
 	}
-	return n, nil, nil
+	return n, nil
 }
 
 func (n *FileNotification) SendChanges(ctx context.Context, _ *ChannelItem, changes []*drive.Change) error {

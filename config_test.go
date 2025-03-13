@@ -23,8 +23,6 @@ func TestConfigLoadNoError(t *testing.T) {
 				defaultCfg := gdnotify.DefaultConfig()
 				defaultCfg.Restrict()
 				require.EqualValues(t, defaultCfg.Expiration, actual.Expiration)
-				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
-				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
 			},
 		},
 		{
@@ -33,7 +31,6 @@ func TestConfigLoadNoError(t *testing.T) {
 			check: func(t *testing.T, actual *gdnotify.Config) {
 				defaultCfg := gdnotify.DefaultConfig()
 				defaultCfg.Restrict()
-				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
 			},
 		},
@@ -43,8 +40,6 @@ func TestConfigLoadNoError(t *testing.T) {
 			check: func(t *testing.T, actual *gdnotify.Config) {
 				defaultCfg := gdnotify.DefaultConfig()
 				defaultCfg.Restrict()
-				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
-				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
 			},
 		},
 		{
@@ -53,7 +48,6 @@ func TestConfigLoadNoError(t *testing.T) {
 			check: func(t *testing.T, actual *gdnotify.Config) {
 				defaultCfg := gdnotify.DefaultConfig()
 				defaultCfg.Restrict()
-				require.EqualValues(t, defaultCfg.Storage, actual.Storage)
 				require.EqualValues(t, defaultCfg.Notification, actual.Notification)
 			},
 		},
