@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Songmu/flextime"
@@ -439,6 +440,7 @@ func (s *DynamoDBStorage) FindOneByChannelID(ctx context.Context, channelID stri
 }
 
 type FileStorage struct {
+	mu    sync.Mutex
 	Items []*ChannelItem
 
 	LockFile string
@@ -527,6 +529,8 @@ func (s *FileStorage) FindOneByChannelID(ctx context.Context, channelID string) 
 }
 
 func (s *FileStorage) transactional(ctx context.Context, fn func(context.Context) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	fileLock := flock.New(s.LockFile)
 	policy := retry.Policy{
 		MinDelay: 100 * time.Millisecond,

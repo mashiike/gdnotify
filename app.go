@@ -2,6 +2,7 @@ package gdnotify
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,7 +23,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/olekukonko/tablewriter"
-	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
@@ -39,9 +39,9 @@ type App struct {
 	withinModifiedTime *time.Duration
 	webhookAddress     string
 	router             *mux.Router
-	driveIDsCache      []string
-	driveIDsFetchedAt  time.Time
-	driveIDsMu         sync.Mutex
+	drivesCache        []*drive.Drive
+	drivesFetchedAt    time.Time
+	drivesMu           sync.Mutex
 	webhookAddressMu   sync.Mutex
 }
 
@@ -69,7 +69,7 @@ func SetAWSConfig(cfg aws.Config) {
 type AppOption struct {
 	Webhook            string         `help:"webhook address" default:"" env:"GDNOTIFY_WEBHOOK"`
 	Expiration         time.Duration  `help:"channel expiration" default:"168h" env:"GDNOTIFY_EXPIRATION"`
-	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." default:"" env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
+	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
 }
 
 func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
@@ -129,20 +129,71 @@ func (app *App) Close() error {
 	return eg.Wait()
 }
 
-func (app *App) checkWebhookAddress(r *http.Request) {
-	app.webhookAddressMu.Lock()
-	defer app.webhookAddressMu.Unlock()
-	if app.webhookAddress != "" {
-		return
+func (app *App) List(ctx context.Context, o ListOption) error {
+	w := o.Output
+	if w == nil {
+		w = os.Stdout
 	}
-	if r.URL.Scheme == "" || r.URL.Host == "" {
-		return
+	itemsCh, err := app.storage.FindAllChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("find all channels: %w", err)
 	}
-	app.webhookAddress = fmt.Sprintf("%s://%s", r.URL.Scheme, r.URL.Host)
-}
-
-func (app *App) List(ctx context.Context, _ ListOption) error {
-	return app.listChannels(ctx, os.Stdout)
+	drives, err := app.Drives(ctx)
+	if err != nil {
+		drives = []*drive.Drive{
+			{
+				Id:   DefaultDriveID,
+				Name: DefaultDriveName,
+			},
+		}
+		slog.WarnContext(ctx, "get DriveIDs failed", "error", err)
+	}
+	exitsDrive := make(map[string]bool, len(drives))
+	driveNameById := make(map[string]string, len(drives))
+	for _, drive := range drives {
+		driveNameById[drive.Id] = drive.Name
+		exitsDrive[drive.Id] = false
+	}
+	table := tablewriter.NewWriter(w)
+	table.SetHeader([]string{"Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
+	for items := range itemsCh {
+		for _, item := range items {
+			exitsDrive[item.DriveID] = true
+			driveName, ok := driveNameById[item.DriveID]
+			if !ok {
+				driveName = "-"
+			}
+			table.Append([]string{
+				item.ChannelID,
+				item.DriveID,
+				driveName,
+				item.PageToken,
+				item.Expiration.Format(time.RFC3339),
+				item.ResourceID,
+				item.PageTokenFetchedAt.Format(time.RFC3339),
+				item.CreatedAt.Format(time.RFC3339),
+				item.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+	}
+	for driveID, exists := range exitsDrive {
+		if exists {
+			continue
+		}
+		table.Append([]string{
+			"-",
+			driveID,
+			driveNameById[driveID],
+			"-",
+			"-",
+			"-",
+			"-",
+			"-",
+			"-",
+		})
+	}
+	table.Render()
+	return nil
 }
 
 func (app *App) Serve(ctx context.Context, o ServeOption) error {
@@ -158,33 +209,43 @@ func (app *App) Serve(ctx context.Context, o ServeOption) error {
 	return nil
 }
 
-func (app *App) Register(ctx context.Context, _ RegisterOption) error {
-	return app.maintenanceChannels(ctx, true)
-}
-
 func (app *App) Cleanup(ctx context.Context, _ CleanupOption) error {
 	return app.cleanupChannels(ctx)
 }
 
 func (app *App) Sync(ctx context.Context, _ SyncOption) error {
-	if err := app.maintenanceChannels(ctx, false); err != nil {
+	if err := app.maintenanceChannels(ctx); err != nil {
 		return err
 	}
 	return app.syncChannels(ctx)
 }
 
 const (
-	DefaultDriveID = "__default__"
+	DefaultDriveID   = "__default__"
+	DefaultDriveName = "My Drive and Individual Files"
 )
 
 func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
-	app.driveIDsMu.Lock()
-	defer app.driveIDsMu.Unlock()
-	if !app.driveIDsFetchedAt.IsZero() && flextime.Since(app.driveIDsFetchedAt) < 5*time.Minute {
-		return app.driveIDsCache, nil
+	drives, err := app.Drives(ctx)
+	if err != nil {
+		return nil, err
 	}
-	driveIDs := make([]string, 0, 1)
-	driveIDs = append(driveIDs, DefaultDriveID)
+	return Map(drives, func(drive *drive.Drive) string {
+		return drive.Id
+	}), nil
+}
+
+func (app *App) Drives(ctx context.Context) ([]*drive.Drive, error) {
+	app.drivesMu.Lock()
+	defer app.drivesMu.Unlock()
+	if !app.drivesFetchedAt.IsZero() && flextime.Since(app.drivesFetchedAt) < 5*time.Minute {
+		return app.drivesCache, nil
+	}
+	drives := make([]*drive.Drive, 0, 1)
+	drives = append(drives, &drive.Drive{
+		Id:   DefaultDriveID,
+		Name: DefaultDriveName,
+	})
 	nextPageToken := "__initial__"
 	for nextPageToken != "" {
 		cell := app.driveSvc.Drives.List().PageSize(10).Context(ctx)
@@ -195,19 +256,19 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("access Drives::list %w", err)
 		}
-		for _, driveResp := range drivesListResp.Drives {
-			slog.InfoContext(ctx, "auto detect", "id", driveResp.Id, "name", driveResp.Name)
-			driveIDs = append(driveIDs, driveResp.Id)
-		}
+		drives = append(drives, drivesListResp.Drives...)
 		nextPageToken = drivesListResp.NextPageToken
 	}
-	slices.Sort(driveIDs)
-	app.driveIDsCache = slices.Compact(driveIDs)
-	app.driveIDsFetchedAt = flextime.Now()
-	return app.driveIDsCache, nil
+	slices.SortFunc(drives, func(a, b *drive.Drive) int {
+		return cmp.Compare(a.Id, b.Id)
+	})
+	app.drivesCache = drives
+	app.drivesCache = slices.Compact(drives)
+	app.drivesFetchedAt = flextime.Now()
+	return app.drivesCache, nil
 }
 
-func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
+func (app *App) maintenanceChannels(ctx context.Context) error {
 	if app.webhookAddress == "" {
 		return fmt.Errorf("webhook address is empty")
 	}
@@ -219,17 +280,19 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 	if err != nil {
 		return fmt.Errorf("get DriveIDs: %w", err)
 	}
-	existsDriveIDs := lo.FromEntries(lo.Map(driveIDs, func(driveID string, _ int) lo.Entry[string, bool] {
-		return lo.Entry[string, bool]{
-			Key:   driveID,
-			Value: false,
-		}
-	}))
+	existsDriveIDs := KeyValues(driveIDs, func(driveID string) (string, bool) {
+		return driveID, false
+	})
+	notFoundDriveIds := make(map[string]bool, len(driveIDs))
 	channelsByDriveID := make(map[string][]*ChannelItem, len(existsDriveIDs))
 	for items := range itemsCh {
 		for _, item := range items {
 			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration, "created_at", item.CreatedAt)
-			existsDriveIDs[item.DriveID] = true
+			if _, ok := existsDriveIDs[item.DriveID]; !ok {
+				notFoundDriveIds[item.DriveID] = true
+			} else {
+				existsDriveIDs[item.DriveID] = true
+			}
 			channels, ok := channelsByDriveID[item.DriveID]
 			if !ok {
 				channels = make([]*ChannelItem, 0)
@@ -286,7 +349,27 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 			}
 			return nil
 		})
-
+	}
+	egForDelete, egCtxForDelete := errgroup.WithContext(ctx)
+	for driveID, exists := range notFoundDriveIds {
+		if !exists {
+			continue
+		}
+		_channels := channelsByDriveID[driveID]
+		if _channels == nil {
+			continue
+		}
+		_driveID := driveID
+		egForDelete.Go(func() error {
+			slog.InfoContext(egCtxForDelete, "drive not exist, try delete channel", "drive_id", _driveID)
+			for _, channel := range _channels {
+				if err := app.DeleteChannel(egCtxForDelete, channel); err != nil {
+					slog.WarnContext(egCtxForDelete, "failed DeleteChannel", "drive_id", _driveID, "channel_id", channel.ChannelID, "resource_id", channel.ResourceID)
+				}
+				slog.InfoContext(egCtxForDelete, "deleted channel", "drive_id", _driveID, "channel_id", channel.ChannelID, "resource_id", channel.ResourceID)
+			}
+			return nil
+		})
 	}
 	if err := egForNew.Wait(); err != nil {
 		return fmt.Errorf("NewChannel:%w", err)
@@ -367,31 +450,6 @@ func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 		slog.DebugContext(ctx, "save channel failed", "error", err)
 		return fmt.Errorf("save channel:%w", err)
 	}
-	return nil
-}
-
-func (app *App) listChannels(ctx context.Context, w io.Writer) error {
-	itemsCh, err := app.storage.FindAllChannels(ctx)
-	if err != nil {
-		return fmt.Errorf("find all channels: %w", err)
-	}
-	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Channel ID", "Drive ID", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
-	for items := range itemsCh {
-		for _, item := range items {
-			table.Append([]string{
-				item.ChannelID,
-				item.DriveID,
-				item.PageToken,
-				item.Expiration.Format(time.RFC3339),
-				item.ResourceID,
-				item.PageTokenFetchedAt.Format(time.RFC3339),
-				item.CreatedAt.Format(time.RFC3339),
-				item.UpdatedAt.Format(time.RFC3339),
-			})
-		}
-	}
-	table.Render()
 	return nil
 }
 

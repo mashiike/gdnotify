@@ -27,6 +27,35 @@ func (app *App) setupRoute() {
 	sub.HandleFunc("/sync", app.handleSync).Methods(http.MethodPost)
 }
 
+func (app *App) checkWebhookAddress(r *http.Request) {
+	app.webhookAddressMu.Lock()
+	defer app.webhookAddressMu.Unlock()
+	xForwardedProto := r.Header.Get("X-Forwarded-Proto")
+	xForwardedHost := r.Header.Get("X-Forwarded-Host")
+	slog.Debug("checking webhook address",
+		"address", app.webhookAddress,
+		"scheme", r.URL.Scheme,
+		"host", r.URL.Host,
+		"path", r.URL.Path,
+		"x-forwarded-proto", r.Header.Get("X-Forwarded-Proto"),
+		"x-forwarded-host", r.Header.Get("X-Forwarded-Host"),
+		"x-forwarded-path", r.Header.Get("X-Forwarded-Path"))
+	if app.webhookAddress != "" {
+		return
+	}
+	if xForwardedProto != "" && xForwardedHost != "" {
+		app.webhookAddress = fmt.Sprintf("%s://%s", xForwardedProto, xForwardedHost)
+		slog.Info("auto detected webhook address from X-Forwarded headers", "address", app.webhookAddress)
+		return
+	}
+	if r.URL.Scheme != "" || r.URL.Host != "" {
+		app.webhookAddress = fmt.Sprintf("%s://%s", r.URL.Scheme, r.URL.Host)
+		slog.Info("auto detected webhook address", "address", app.webhookAddress)
+		return
+	}
+	slog.Warn("failed to detect webhook address")
+}
+
 func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	app.router.ServeHTTP(w, r)
 }
@@ -96,7 +125,7 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 func (app *App) handleSync(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	var hasErr bool
-	if err := app.maintenanceChannels(ctx, false); err != nil {
+	if err := app.maintenanceChannels(ctx); err != nil {
 		slog.WarnContext(ctx, "Maintenance channels failed", "details", err)
 		hasErr = true
 	}

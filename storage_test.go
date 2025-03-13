@@ -3,7 +3,9 @@ package gdnotify_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -11,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/mashiike/gdnotify"
 	"github.com/najeira/randstr"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,7 @@ func TestConvertChannelItemDynamoDBAttributeValues(t *testing.T) {
 		t.Run(fmt.Sprintf("item[%d]", i), func(t *testing.T) {
 			t.Logf("%#v", item)
 			values := item.ToDynamoDBAttributeValues()
-			require.ElementsMatch(t, expectedKeys, lo.Keys(values))
+			require.ElementsMatch(t, expectedKeys, slices.Collect(maps.Keys(values)))
 			require.EqualValues(t, item, gdnotify.NewChannelItemWithDynamoDBAttributeValues(values))
 		})
 	}

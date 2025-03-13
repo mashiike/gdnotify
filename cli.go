@@ -15,7 +15,6 @@ import (
 )
 
 type CLI struct {
-	Config        string             `help:"config file path" default:"gdnotify.yaml" env:"GDNOTIFY_CONFIG"`
 	LogLevel      string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
 	LogFormat     string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
 	LogColor      bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
@@ -24,21 +23,18 @@ type CLI struct {
 	Nootification NotificationOption `embed:"" prefix:"notification-"`
 	AppOption     `embed:""`
 
-	List     ListOption     `cmd:"" help:"list notification channels"`
-	Serve    ServeOption    `cmd:"" help:"serve webhook server" default:"true"`
-	Register RegisterOption `cmd:"" help:"register a new notification channel for a drive for which a notification channel has not yet been set"`
-	Cleanup  CleanupOption  `cmd:"" help:"remove all notification channels"`
-	Sync     SyncOption     `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
+	List    ListOption    `cmd:"" help:"list notification channels"`
+	Serve   ServeOption   `cmd:"" help:"serve webhook server" default:"true"`
+	Cleanup CleanupOption `cmd:"" help:"remove all notification channels"`
+	Sync    SyncOption    `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
 }
 
 type ListOption struct {
+	Output io.Writer `kong:"-"`
 }
 
 type ServeOption struct {
 	Port int `help:"webhook httpd port" default:"25254" env:"GDNOTIFY_PORT"`
-}
-
-type RegisterOption struct {
 }
 
 type SyncOption struct {
@@ -91,8 +87,6 @@ func (c *CLI) run(ctx context.Context, k *kong.Context, logger *slog.Logger) err
 		return app.List(ctx, c.List)
 	case "serve", "":
 		return app.Serve(ctx, c.Serve)
-	case "register":
-		return app.Register(ctx, c.Register)
 	case "cleanup":
 		return app.Cleanup(ctx, c.Cleanup)
 	case "sync":
