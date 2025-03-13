@@ -2,6 +2,7 @@ package gdnotify
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,26 @@ import (
 
 	logx "github.com/mashiike/go-logx"
 )
+
+func (app *App) setupRoute() {
+	app.router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, http.StatusOK, http.StatusText(http.StatusOK))
+	})
+	sub := app.router.NewRoute().Subrouter()
+	sub.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			app.checkWebhookAddress(r)
+			next.ServeHTTP(w, r)
+		})
+	})
+	sub.HandleFunc("/", app.handleWebhook).Methods(http.MethodPost)
+	sub.HandleFunc("/sync", app.handleSync).Methods(http.MethodPost)
+}
+
+func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	app.router.ServeHTTP(w, r)
+}
 
 func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -104,12 +125,10 @@ func (app *App) handleSync(w http.ResponseWriter, r *http.Request) {
 	if err := app.maintenanceChannels(ctx, false); err != nil {
 		slog.WarnContext(ctx, "maintenance channels failed", "details", err)
 		hasErr = true
-		return
 	}
 	if err := app.syncChannels(ctx); err != nil {
 		slog.WarnContext(ctx, "sync channels failed", "details", err)
 		hasErr = true
-		return
 	}
 	if hasErr {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -1,0 +1,11 @@
+{
+  "changeType": "kind#change",
+  "drive": {
+    "id": "drive1",
+    "kind": "kind#drive"
+  },
+  "file": {
+    "id": "file1",
+    "kind": "kind#file"
+  }
+}

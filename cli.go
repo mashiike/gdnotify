@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/fatih/color"
+	"github.com/mashiike/gcreds4aws"
 	"github.com/mashiike/sloglevel"
 	"github.com/mashiike/slogutils"
 )
@@ -79,7 +80,10 @@ func (c *CLI) run(ctx context.Context, k *kong.Context, logger *slog.Logger) err
 	}
 	defer func() {
 		if err := app.Close(); err != nil {
-			slog.WarnContext(ctx, "cleanup error", "details", err)
+			slog.WarnContext(ctx, "app cleanup error", "details", err)
+		}
+		if err := gcreds4aws.Close(); err != nil {
+			slog.WarnContext(ctx, "gqreds cleanup error", "details", err)
 		}
 	}()
 	switch cmd {
@@ -107,7 +111,7 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
-	return New(c.AppOption, storage, notification)
+	return New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
 }
 
 var LevelNotice slog.Level = slog.LevelInfo + 2

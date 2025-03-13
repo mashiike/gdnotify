@@ -21,7 +21,6 @@ import (
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/mashiike/gcreds4aws"
 	logx "github.com/mashiike/go-logx"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
@@ -44,6 +43,7 @@ type App struct {
 	driveIDsCache      []string
 	driveIDsFetchedAt  time.Time
 	driveIDsMu         sync.Mutex
+	webhookAddressMu   sync.Mutex
 }
 
 var awsCfg *aws.Config
@@ -73,7 +73,7 @@ type AppOption struct {
 	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." default:"" env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
 }
 
-func New(cfg *Config, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
+func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
 	cleanupFns := make([]func() error, 0)
 	if closer, ok := storage.(io.Closer); ok {
@@ -89,11 +89,7 @@ func New(cfg *Config, storage Storage, notification Notification, gcpOpts ...opt
 			drive.DriveScope,
 			drive.DriveFileScope,
 		),
-		gcreds4aws.WithCredentials(ctx),
 	)
-	cleanupFns = append(cleanupFns, func() error {
-		return gcreds4aws.Close()
-	})
 	driveSvc, err := drive.NewService(ctx, gcpOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("create Google Drive Service: %w", err)
@@ -117,11 +113,6 @@ func New(cfg *Config, storage Storage, notification Notification, gcpOpts ...opt
 	return app, nil
 }
 
-func (app *App) setupRoute() {
-	app.router.HandleFunc("/", app.handleWebhook)
-	app.router.HandleFunc("/sync", app.handleSync).Methods(http.MethodPost)
-}
-
 func (app *App) Close() error {
 	eg, ctx := errgroup.WithContext(context.Background())
 	for i, cleanup := range app.cleanupFns {
@@ -139,12 +130,24 @@ func (app *App) Close() error {
 	return eg.Wait()
 }
 
+func (app *App) checkWebhookAddress(r *http.Request) {
+	app.webhookAddressMu.Lock()
+	defer app.webhookAddressMu.Unlock()
+	if app.webhookAddress != "" {
+		return
+	}
+	if r.URL.Scheme == "" || r.URL.Host == "" {
+		return
+	}
+	app.webhookAddress = fmt.Sprintf("%s://%s", r.URL.Scheme, r.URL.Host)
+}
+
 func (app *App) List(ctx context.Context, _ ListOption) error {
 	return app.listChannels(ctx, os.Stdout)
 }
 
 func (app *App) Serve(ctx context.Context, o ServeOption) error {
-	r := ridge.New(fmt.Sprintf(":%d", o.Port), "/", app.router)
+	r := ridge.New(fmt.Sprintf(":%d", o.Port), "/", app)
 	r.RequestBuilder = func(event json.RawMessage) (*http.Request, error) {
 		req, err := ridge.NewRequest(event)
 		if err == nil && req.Method != "" && req.URL != nil && req.URL.Path != "" {
@@ -207,7 +210,7 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 
 func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
 	if app.webhookAddress == "" {
-		return errors.New("webhook address is empty, plz check configure")
+		return fmt.Errorf("webhook address is empty")
 	}
 	itemsCh, err := app.storage.FindAllChannels(ctx)
 	if err != nil {

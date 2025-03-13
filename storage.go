@@ -23,11 +23,12 @@ import (
 )
 
 type StorageOption struct {
-	Type       string `help:"storage type" default:"dynamodb" enum:"dynamodb,file" env:"GDNOTIFY_STORAGE_TYPE"`
-	TableName  string `help:"dynamodb table name" default:"gdnotify" env:"GDNOTIFY_DDB_TABLE_NAME"`
-	AutoCreate bool   `help:"auto create dynamodb table" default:"false" env:"GDNOTIFY_DDB_AUTO_CREATE" negatable:""`
-	DataFile   string `help:"file storage data file" default:"gdnotify.dat" env:"GDNOTIFY_FILE_STORAGE_DATA_FILE"`
-	LockFile   string `help:"file storage lock file" default:"gdnotify.lock" env:"GDNOTIFY_FILE_STORAGE_LOCK_FILE"`
+	Type             string `help:"storage type" default:"dynamodb" enum:"dynamodb,file" env:"GDNOTIFY_STORAGE_TYPE"`
+	TableName        string `help:"dynamodb table name" default:"gdnotify" env:"GDNOTIFY_DDB_TABLE_NAME"`
+	AutoCreate       bool   `help:"auto create dynamodb table" default:"false" env:"GDNOTIFY_DDB_AUTO_CREATE" negatable:""`
+	DynamoDBEndpoint string `help:"dynamodb endpoint" env:"GDNOTIFY_DDB_ENDPOINT"`
+	DataFile         string `help:"file storage data file" default:"gdnotify.dat" env:"GDNOTIFY_FILE_STORAGE_DATA_FILE"`
+	LockFile         string `help:"file storage lock file" default:"gdnotify.lock" env:"GDNOTIFY_FILE_STORAGE_LOCK_FILE"`
 }
 
 type ChannelItem struct {
@@ -185,8 +186,14 @@ func NewDynamoDBStorage(ctx context.Context, cfg StorageOption) (*DynamoDBStorag
 	if err != nil {
 		return nil, err
 	}
+	opts := []func(*dynamodb.Options){}
+	if cfg.DynamoDBEndpoint != "" {
+		opts = append(opts, func(o *dynamodb.Options) {
+			o.BaseEndpoint = aws.String(cfg.DynamoDBEndpoint)
+		})
+	}
 	s := &DynamoDBStorage{
-		client:    dynamodb.NewFromConfig(awsCfg),
+		client:    dynamodb.NewFromConfig(awsCfg, opts...),
 		tableName: cfg.TableName,
 	}
 	logx.Printf(ctx, "[info] check describe dynamodb table `%s`", s.tableName)
@@ -201,10 +208,6 @@ func NewDynamoDBStorage(ctx context.Context, cfg StorageOption) (*DynamoDBStorag
 	}
 
 	return s, nil
-}
-
-func (s *DynamoDBStorage) Close() error {
-	return nil
 }
 
 func (s *DynamoDBStorage) tableExists(ctx context.Context) (bool, error) {
@@ -423,6 +426,10 @@ func (s *DynamoDBStorage) FindOneByChannelID(ctx context.Context, channelID stri
 	if err != nil {
 		logx.Printf(ctx, "[warn] failed get item channel_id=`%s` from dynamodb table `%s`", channelID, s.tableName)
 		return nil, err
+	}
+	if output.Item == nil {
+		logx.Printf(ctx, "[warn] not found item channel_id=`%s` from dynamodb table `%s`", channelID, s.tableName)
+		return nil, &ChannelNotFound{ChannelID: channelID}
 	}
 	logx.Printf(ctx, "[debug] success get item channel_id=`%s` from dynamodb table `%s`", channelID, s.tableName)
 	return NewChannelItemWithDynamoDBAttributeValues(output.Item), nil
