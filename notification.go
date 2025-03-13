@@ -21,10 +21,10 @@ type Notification interface {
 	SendChanges(context.Context, *ChannelItem, []*drive.Change) error
 }
 
-func NewNotification(ctx context.Context, cfg *NotificationConfig, awsCfg aws.Config) (Notification, func() error, error) {
+func NewNotification(ctx context.Context, cfg *NotificationConfig) (Notification, func() error, error) {
 	switch cfg.Type {
 	case NotificationTypeEventBridge:
-		return NewEventBridgeNotification(ctx, cfg, awsCfg)
+		return NewEventBridgeNotification(ctx, cfg)
 	case NotificationTypeFile:
 		return NewFileNotification(ctx, cfg)
 	}
@@ -40,7 +40,11 @@ type EventBridgeNotification struct {
 	eventBus string
 }
 
-func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig, awsCfg aws.Config) (Notification, func() error, error) {
+func NewEventBridgeNotification(ctx context.Context, cfg *NotificationConfig) (Notification, func() error, error) {
+	awsCfg, err := loadAWSConfig()
+	if err != nil {
+		return nil, nil, err
+	}
 	n := &EventBridgeNotification{
 		client:   eventbridge.NewFromConfig(awsCfg),
 		eventBus: *cfg.EventBus,

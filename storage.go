@@ -157,10 +157,10 @@ func (err *ChannelAlreadyExists) Error() string {
 	return fmt.Sprintf("channel_id:%s already exists", err.ChannelID)
 }
 
-func NewStorage(ctx context.Context, cfg *StorageConfig, awsCfg aws.Config) (Storage, func() error, error) {
+func NewStorage(ctx context.Context, cfg *StorageConfig) (Storage, func() error, error) {
 	switch cfg.Type {
 	case StorageTypeDynamoDB:
-		return NewDynamoDBStorage(ctx, cfg, awsCfg)
+		return NewDynamoDBStorage(ctx, cfg)
 	case StorageTypeFile:
 		return NewFileStorage(ctx, cfg)
 	}
@@ -172,7 +172,11 @@ type DynamoDBStorage struct {
 	tableName string
 }
 
-func NewDynamoDBStorage(ctx context.Context, cfg *StorageConfig, awsCfg aws.Config) (*DynamoDBStorage, func() error, error) {
+func NewDynamoDBStorage(ctx context.Context, cfg *StorageConfig) (*DynamoDBStorage, func() error, error) {
+	awsCfg, err := loadAWSConfig()
+	if err != nil {
+		return nil, nil, err
+	}
 	s := &DynamoDBStorage{
 		client:    dynamodb.NewFromConfig(awsCfg),
 		tableName: *cfg.TableName,

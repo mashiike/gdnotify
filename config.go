@@ -127,7 +127,7 @@ func fetchConfigFromHTTP(ctx context.Context, u *url.URL) ([]byte, error) {
 func fetchConfigFromS3(ctx context.Context, u *url.URL) ([]byte, error) {
 	logx.Println(ctx, "[info] fetching from", u)
 
-	awsCfg, err := defaultAWSConfig(ctx)
+	awsCfg, err := loadAWSConfig()
 	if err != nil {
 		return nil, err
 	}

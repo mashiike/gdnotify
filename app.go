@@ -46,7 +46,12 @@ type App struct {
 	driveIDsMu         sync.Mutex
 }
 
-func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
+var awsCfg *aws.Config
+var loadAWSConfig = sync.OnceValues(func() (aws.Config, error) {
+	if awsCfg != nil {
+		return *awsCfg, nil
+	}
+	ctx := context.Background()
 	awsOpts := make([]func(*config.LoadOptions) error, 0)
 	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
 		awsOpts = append(awsOpts, config.WithRegion(region))
@@ -56,24 +61,24 @@ func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
 		return *aws.NewConfig(), err
 	}
 	return awsCfg, nil
+})
+
+func SetAWSConfig(cfg aws.Config) {
+	awsCfg = &cfg
 }
 
 func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
-	awsCfg, err := defaultAWSConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	cleanupFns := make([]func() error, 0)
-	storage, cleanup, err := NewStorage(ctx, cfg.Storage, awsCfg)
+	storage, cleanup, err := NewStorage(ctx, cfg.Storage)
 	if err != nil {
 		return nil, fmt.Errorf("create Storage: %w", err)
 	}
 	if cleanup != nil {
 		cleanupFns = append(cleanupFns, cleanup)
 	}
-	notification, cleanup, err := NewNotification(ctx, cfg.Notification, awsCfg)
+	notification, cleanup, err := NewNotification(ctx, cfg.Notification)
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
