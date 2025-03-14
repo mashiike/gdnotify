@@ -3,7 +3,9 @@ package gdnotify_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -11,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/mashiike/gdnotify"
 	"github.com/najeira/randstr"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,7 @@ func TestConvertChannelItemDynamoDBAttributeValues(t *testing.T) {
 		t.Run(fmt.Sprintf("item[%d]", i), func(t *testing.T) {
 			t.Logf("%#v", item)
 			values := item.ToDynamoDBAttributeValues()
-			require.ElementsMatch(t, expectedKeys, lo.Keys(values))
+			require.ElementsMatch(t, expectedKeys, slices.Collect(maps.Keys(values)))
 			require.EqualValues(t, item, gdnotify.NewChannelItemWithDynamoDBAttributeValues(values))
 		})
 	}
@@ -103,4 +104,104 @@ func TestChannelItemIsAboutToExpired(t *testing.T) {
 			require.EqualValues(t, c.expected, actual)
 		})
 	}
+}
+
+func setupDynamoDB(t *testing.T) *gdnotify.DynamoDBStorage {
+	t.Helper()
+	t.Setenv("AWS_ACCESS_KEY_ID", "dummy0000dummy")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "dummy0000dummy")
+	t.Setenv("AWS_REGION", "us-west-2")
+
+	tableName := fmt.Sprintf("gdnotify_test_%s", randstr.CryptoString(8))
+
+	cfg := gdnotify.StorageOption{
+		Type:             "dynamodb",
+		TableName:        tableName,
+		DynamoDBEndpoint: "http://localhost:8000",
+		AutoCreate:       true,
+	}
+
+	ctx := context.Background()
+	storage, err := gdnotify.NewDynamoDBStorage(ctx, cfg)
+	if err != nil {
+		t.Fatalf("failed to create DynamoDB storage: %v", err)
+	}
+
+	return storage
+}
+
+func TestDynamoDBStorage_SaveChannel(t *testing.T) {
+	storage := setupDynamoDB(t)
+	ctx := context.Background()
+
+	item := &gdnotify.ChannelItem{
+		ChannelID:  "test-channel",
+		Expiration: time.Now().Add(1 * time.Hour),
+		PageToken:  "test-token",
+		ResourceID: "test-resource",
+		DriveID:    "test-drive",
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	err := storage.SaveChannel(ctx, item)
+	require.NoError(t, err)
+
+	savedItem, err := storage.FindOneByChannelID(ctx, "test-channel")
+	require.NoError(t, err)
+	require.Equal(t, item.ChannelID, savedItem.ChannelID)
+	require.Equal(t, item.PageToken, savedItem.PageToken)
+}
+
+func TestDynamoDBStorage_UpdatePageToken(t *testing.T) {
+	storage := setupDynamoDB(t)
+	ctx := context.Background()
+
+	item := &gdnotify.ChannelItem{
+		ChannelID:  "test-channel",
+		Expiration: time.Now().Add(1 * time.Hour),
+		PageToken:  "test-token",
+		ResourceID: "test-resource",
+		DriveID:    "test-drive",
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	err := storage.SaveChannel(ctx, item)
+	require.NoError(t, err)
+
+	item.PageToken = "updated-token"
+	item.UpdatedAt = time.Now()
+
+	err = storage.UpdatePageToken(ctx, item)
+	require.NoError(t, err)
+
+	updatedItem, err := storage.FindOneByChannelID(ctx, "test-channel")
+	require.NoError(t, err)
+	require.Equal(t, "updated-token", updatedItem.PageToken)
+}
+
+func TestDynamoDBStorage_DeleteChannel(t *testing.T) {
+	storage := setupDynamoDB(t)
+	ctx := context.Background()
+
+	item := &gdnotify.ChannelItem{
+		ChannelID:  "test-channel",
+		Expiration: time.Now().Add(1 * time.Hour),
+		PageToken:  "test-token",
+		ResourceID: "test-resource",
+		DriveID:    "test-drive",
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	err := storage.SaveChannel(ctx, item)
+	require.NoError(t, err)
+
+	err = storage.DeleteChannel(ctx, item)
+	require.NoError(t, err)
+
+	_, err = storage.FindOneByChannelID(ctx, "test-channel")
+	require.Error(t, err)
+	require.IsType(t, &gdnotify.ChannelNotFoundError{}, err)
 }

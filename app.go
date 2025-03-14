@@ -2,30 +2,27 @@ package gdnotify
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
+	"slices"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/Songmu/flextime"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
-	logx "github.com/mashiike/go-logx"
-	"github.com/mattn/go-shellwords"
+	"github.com/gorilla/mux"
 	"github.com/olekukonko/tablewriter"
-	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
@@ -35,73 +32,25 @@ import (
 type App struct {
 	storage            Storage
 	notification       Notification
-	drivesAutoDetect   bool
-	drives             map[string]*DriveConfig
 	rotateRemaining    time.Duration
 	driveSvc           *drive.Service
 	cleanupFns         []func() error
 	expiration         time.Duration
 	withinModifiedTime *time.Duration
 	webhookAddress     string
+	router             *mux.Router
+	drivesCache        []*drive.Drive
+	drivesFetchedAt    time.Time
+	drivesMu           sync.Mutex
+	webhookAddressMu   sync.Mutex
 }
 
-type RunOptions struct {
-	Mode         RunMode
-	LocalAddress string
-	CLICommand   CLICommand
-}
-
-func WithRunMode(mode string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		if m, err := RunModeString(mode); err != nil {
-			return err
-		} else {
-			opts.Mode = m
-		}
-		return nil
+var awsCfg *aws.Config
+var loadAWSConfig = sync.OnceValues(func() (aws.Config, error) {
+	if awsCfg != nil {
+		return *awsCfg, nil
 	}
-}
-
-func WithLocalAddress(addr string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		opts.LocalAddress = addr
-		return nil
-	}
-}
-
-func WithCLICommand(cmd string) func(*RunOptions) error {
-	return func(opts *RunOptions) error {
-		if c, err := CLICommandString(cmd); err != nil {
-			return err
-		} else {
-			opts.CLICommand = c
-		}
-		return nil
-	}
-}
-
-func isLambda() bool {
-	if strings.HasPrefix(os.Getenv("AWS_EXECUTION_ENV"), "AWS_Lambda") || os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
-		return true
-	}
-	return false
-}
-
-func DefaultRunMode() RunMode {
-	if isLambda() {
-		return RunModeWebhook
-	}
-	return RunModeCLI
-}
-
-func newRunOptions() *RunOptions {
-	return &RunOptions{
-		Mode:         DefaultRunMode(),
-		LocalAddress: ":8080",
-	}
-}
-
-func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
+	ctx := context.Background()
 	awsOpts := make([]func(*config.LoadOptions) error, 0)
 	if region := os.Getenv("AWS_DEFAULT_REGION"); region != "" {
 		awsOpts = append(awsOpts, config.WithRegion(region))
@@ -111,37 +60,26 @@ func defaultAWSConfig(ctx context.Context) (aws.Config, error) {
 		return *aws.NewConfig(), err
 	}
 	return awsCfg, nil
+})
+
+func SetAWSConfig(cfg aws.Config) {
+	awsCfg = &cfg
 }
 
-func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
-	drives := lo.FromEntries(lo.Map(cfg.Drives, func(cfg *DriveConfig, _ int) lo.Entry[string, *DriveConfig] {
-		return lo.Entry[string, *DriveConfig]{
-			Key:   cfg.DriveID,
-			Value: cfg,
-		}
-	}))
+type AppOption struct {
+	Webhook            string         `help:"webhook address" default:"" env:"GDNOTIFY_WEBHOOK"`
+	Expiration         time.Duration  `help:"channel expiration" default:"168h" env:"GDNOTIFY_EXPIRATION"`
+	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
+}
 
+func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
-
-	awsCfg, err := defaultAWSConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	cleanupFns := make([]func() error, 0)
-	storage, cleanup, err := NewStorage(ctx, cfg.Storage, awsCfg)
-	if err != nil {
-		return nil, fmt.Errorf("create Storage: %w", err)
+	if closer, ok := storage.(io.Closer); ok {
+		cleanupFns = append(cleanupFns, closer.Close)
 	}
-	if cleanup != nil {
-		cleanupFns = append(cleanupFns, cleanup)
-	}
-	notification, cleanup, err := NewNotification(ctx, cfg.Notification, awsCfg)
-	if err != nil {
-		return nil, fmt.Errorf("create Notification: %w", err)
-	}
-	if cleanup != nil {
-		cleanupFns = append(cleanupFns, cleanup)
+	if closer, ok := notification.(io.Closer); ok {
+		cleanupFns = append(cleanupFns, closer.Close)
 	}
 
 	gcpOpts = append(
@@ -151,34 +89,26 @@ func New(cfg *Config, gcpOpts ...option.ClientOption) (*App, error) {
 			drive.DriveFileScope,
 		),
 	)
-	credentialsBackend, err := NewCredentialsBackend(ctx, cfg.Credentials, awsCfg)
-	if err != nil {
-		return nil, fmt.Errorf("create Credentials Backend: %w", err)
-	}
-	gcpOpts, err = credentialsBackend.WithCredentialsClientOption(ctx, gcpOpts)
-	if err != nil {
-		return nil, fmt.Errorf("google Application Credentials Load: %w", err)
-	}
 	driveSvc, err := drive.NewService(ctx, gcpOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("create Google Drive Service: %w", err)
 	}
 
 	rotateRemaining := time.Duration(0.2 * float64(cfg.Expiration))
-	log.Printf("[debug] cfg.Expiration=%s 20%% rotateRemaining=%s", cfg.Expiration, rotateRemaining)
+	slog.DebugContext(ctx, "cfg.Expiration and rotateRemaining", "cfg.Expiration", cfg.Expiration, "rotateRemaining", rotateRemaining)
 
 	app := &App{
 		storage:            storage,
 		notification:       notification,
-		drivesAutoDetect:   *cfg.DrivesAutoDetect,
-		drives:             drives,
 		rotateRemaining:    rotateRemaining,
 		driveSvc:           driveSvc,
 		cleanupFns:         cleanupFns,
 		webhookAddress:     cfg.Webhook,
 		expiration:         cfg.Expiration,
 		withinModifiedTime: cfg.WithinModifiedTime,
+		router:             mux.NewRouter(),
 	}
+	app.setupRoute()
 	return app, nil
 }
 
@@ -187,162 +117,138 @@ func (app *App) Close() error {
 	for i, cleanup := range app.cleanupFns {
 		_i, _cleanup := i, cleanup
 		eg.Go(func() error {
-			logx.Printf(ctx, "[debug][%d] start cleanup", _i)
+			slog.DebugContext(ctx, "start cleanup", "index", _i)
 			if err := _cleanup(); err != nil {
-				logx.Printf(ctx, "[debug][%d] error cleanup: %s", _i, err.Error())
+				slog.DebugContext(ctx, "error cleanup", "index", _i, "error", err)
 				return err
 			}
-			logx.Printf(ctx, "[debug][%d] end cleanup", _i)
+			slog.DebugContext(ctx, "end cleanup", "index", _i)
 			return nil
 		})
 	}
 	return eg.Wait()
 }
 
-func (app *App) Run(optFns ...func(*RunOptions) error) error {
-	return app.RunWithContext(context.Background(), optFns...)
-}
-
-func (app *App) RunWithContext(ctx context.Context, optFns ...func(*RunOptions) error) error {
-	opts := newRunOptions()
-	for _, optFn := range optFns {
-		if err := optFn(opts); err != nil {
-			return err
+func (app *App) List(ctx context.Context, o ListOption) error {
+	w := o.Output
+	if w == nil {
+		w = os.Stdout
+	}
+	itemsCh, err := app.storage.FindAllChannels(ctx)
+	if err != nil {
+		return fmt.Errorf("find all channels: %w", err)
+	}
+	drives, err := app.Drives(ctx)
+	if err != nil {
+		drives = []*drive.Drive{
+			{
+				Id:   DefaultDriveID,
+				Name: DefaultDriveName,
+			},
 		}
+		slog.WarnContext(ctx, "get DriveIDs failed", "error", err)
 	}
-	switch opts.Mode {
-	case RunModeWebhook:
-		logx.Println(ctx, "[info] run as webhook server")
-		return app.runAsWebhookServer(ctx, opts)
-	case RunModeMaintainer:
-		logx.Println(ctx, "[info] run as channel maintainer")
-		return app.runAsChannelMaintainer(ctx, opts)
-	case RunModeSyncer:
-		logx.Println(ctx, "[info] run as channel syncer")
-		return app.runAsChannelSyncer(ctx, opts)
-	case RunModeCLI:
-		logx.Println(ctx, "[info] run as CLI")
-		return app.runAsCLI(ctx, opts)
+	exitsDrive := make(map[string]bool, len(drives))
+	driveNameByID := make(map[string]string, len(drives))
+	for _, drive := range drives {
+		driveNameByID[drive.Id] = drive.Name
+		exitsDrive[drive.Id] = false
 	}
-
-	return errors.New("unknown run mode")
-}
-
-func (app *App) runAsWebhookServer(ctx context.Context, opts *RunOptions) error {
-	var wg sync.WaitGroup
-	if tunnelCmd := os.Getenv("HTTP_TUNNEL"); !isLambda() && tunnelCmd != "" {
-		logx.Println(ctx, "[info] set HTTP_TUNNEL detected")
-		var rendered string
-		if tmpl, err := template.New("tunnel").Parse(tunnelCmd); err != nil {
-			logx.Println(ctx, "[warn] failed HTTP_TUNNEL parse as go template: ", err)
-			rendered = tunnelCmd
-		} else {
-			var buf bytes.Buffer
-			if err := tmpl.Execute(&buf, map[string]interface{}{
-				"Address": opts.LocalAddress,
-			}); err != nil {
-				logx.Println(ctx, "[warn] failed HTTP_TUNNEL execute as go template: ", err)
-				rendered = tunnelCmd
-			} else {
-				rendered = buf.String()
+	table := tablewriter.NewWriter(w)
+	table.SetHeader([]string{"Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
+	for items := range itemsCh {
+		for _, item := range items {
+			exitsDrive[item.DriveID] = true
+			driveName, ok := driveNameByID[item.DriveID]
+			if !ok {
+				driveName = "-"
 			}
+			table.Append([]string{
+				item.ChannelID,
+				item.DriveID,
+				driveName,
+				item.PageToken,
+				item.Expiration.Format(time.RFC3339),
+				item.ResourceID,
+				item.PageTokenFetchedAt.Format(time.RFC3339),
+				item.CreatedAt.Format(time.RFC3339),
+				item.UpdatedAt.Format(time.RFC3339),
+			})
 		}
-		args, err := shellwords.Parse(rendered)
-		if err != nil {
-			return fmt.Errorf("HTTP_TUNNEL parse failed: %w", err)
-		}
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		tunnelLogFilename := "tunnel.log"
-		fp, err := os.Create(tunnelLogFilename)
-		if err != nil {
-			return fmt.Errorf("can not create %s: %w", tunnelLogFilename, err)
-		}
-		defer fp.Close()
-		cmd.Stdout = fp
-		cmd.Stderr = fp
-		logx.Printf(ctx, "[info] output HTTP_TUNNEL log to `%s`", tunnelLogFilename)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := cmd.Run(); err != nil {
-				logx.Println(ctx, "[warn] tunnel command exit:", err)
-			}
-		}()
 	}
-	ridge.RunWithContext(ctx, opts.LocalAddress, "/", app)
-	wg.Wait()
+	for driveID, exists := range exitsDrive {
+		if exists {
+			continue
+		}
+		table.Append([]string{
+			"-",
+			driveID,
+			driveNameByID[driveID],
+			"-",
+			"-",
+			"-",
+			"-",
+			"-",
+			"-",
+		})
+	}
+	table.Render()
 	return nil
 }
 
-func (app *App) runAsChannelMaintainer(ctx context.Context, _ *RunOptions) error {
-	if isLambda() {
-		logx.Println(ctx, "[info] run on lambda")
-		lambda.StartWithOptions(func(ctx context.Context, event json.RawMessage) (interface{}, error) {
-			if err := app.maintenanceChannels(ctx, false); err != nil {
-				logx.Println(ctx, "[error] failed maintenance channels: ", err)
-				return nil, err
-			}
-			return map[string]interface{}{
-				"Status": 200,
-			}, nil
-		}, lambda.WithContext(ctx))
-		return nil
+func (app *App) Serve(ctx context.Context, o ServeOption) error {
+	r := ridge.New(fmt.Sprintf(":%d", o.Port), "/", app)
+	r.RequestBuilder = func(event json.RawMessage) (*http.Request, error) {
+		req, err := ridge.NewRequest(event)
+		if err == nil && req.Method != "" && req.URL != nil && req.URL.Path != "" {
+			return req, nil
+		}
+		return http.NewRequest(http.MethodPost, "/sync", bytes.NewReader(event))
 	}
-	logx.Println(ctx, "[info] run on local")
-	return app.maintenanceChannels(ctx, false)
+	r.RunWithContext(ctx)
+	return nil
 }
 
-func (app *App) runAsChannelSyncer(ctx context.Context, _ *RunOptions) error {
-	if isLambda() {
-		logx.Println(ctx, "[info] run on lambda")
-		lambda.StartWithOptions(func(ctx context.Context) (interface{}, error) {
-			if err := app.syncChannels(ctx); err != nil {
-				logx.Println(ctx, "[error] failed sync channels: ", err)
-				return nil, err
-			}
-			return map[string]interface{}{
-				"Status": 200,
-			}, nil
-		}, lambda.WithContext(ctx))
-		return nil
+func (app *App) Cleanup(ctx context.Context, _ CleanupOption) error {
+	return app.cleanupChannels(ctx)
+}
+
+func (app *App) Sync(ctx context.Context, _ SyncOption) error {
+	if err := app.maintenanceChannels(ctx); err != nil {
+		return err
 	}
-	logx.Println(ctx, "[info] run on local")
 	return app.syncChannels(ctx)
 }
 
-func (app *App) runAsCLI(ctx context.Context, opts *RunOptions) error {
-	if isLambda() {
-		return errors.New("run_mode is CLI, can not run on AWS Lambda")
-	}
-	switch opts.CLICommand {
-	case CLICommandList:
-		return app.listChannels(ctx, os.Stdout)
-	case CLICommandServe:
-		return app.runAsWebhookServer(ctx, opts)
-	case CLICommandRegister:
-		return app.maintenanceChannels(ctx, true)
-	case CLICommandMaintenance:
-		return app.maintenanceChannels(ctx, false)
-	case CLICommandCleanup:
-		return app.cleanupChannels(ctx)
-	case CLICommandSync:
-		return app.syncChannels(ctx)
-	default:
-		return fmt.Errorf("unknown cli command `%s`", opts.CLICommand)
-	}
-}
+const (
+	DefaultDriveID   = "__default__"
+	DefaultDriveName = "My Drive and Individual Files"
+)
 
 func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
-	driveIDs := lo.Keys(app.drives)
-	if !app.drivesAutoDetect {
-		return driveIDs, nil
+	drives, err := app.Drives(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if len(driveIDs) == 0 {
-		driveIDs = append(driveIDs, DefaultDriveID)
+	return Map(drives, func(drive *drive.Drive) string {
+		return drive.Id
+	}), nil
+}
+
+func (app *App) Drives(ctx context.Context) ([]*drive.Drive, error) {
+	app.drivesMu.Lock()
+	defer app.drivesMu.Unlock()
+	if !app.drivesFetchedAt.IsZero() && flextime.Since(app.drivesFetchedAt) < 5*time.Minute {
+		return app.drivesCache, nil
 	}
+	drives := make([]*drive.Drive, 0, 1)
+	drives = append(drives, &drive.Drive{
+		Id:   DefaultDriveID,
+		Name: DefaultDriveName,
+	})
 	nextPageToken := "__initial__"
 	for nextPageToken != "" {
-		cell := app.driveSvc.Drives.List().PageSize(2).Context(ctx)
+		cell := app.driveSvc.Drives.List().PageSize(10).Context(ctx)
 		if nextPageToken != "__initial__" {
 			cell = cell.PageToken(nextPageToken)
 		}
@@ -350,18 +256,21 @@ func (app *App) DriveIDs(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("access Drives::list %w", err)
 		}
-		for _, driveResp := range drivesListResp.Drives {
-			log.Printf("[info] auto detect `%s (%s)`", driveResp.Id, driveResp.Name)
-			driveIDs = append(driveIDs, driveResp.Id)
-		}
+		drives = append(drives, drivesListResp.Drives...)
 		nextPageToken = drivesListResp.NextPageToken
 	}
-	return lo.Uniq(driveIDs), nil
+	slices.SortFunc(drives, func(a, b *drive.Drive) int {
+		return cmp.Compare(a.Id, b.Id)
+	})
+	app.drivesCache = drives
+	app.drivesCache = slices.Compact(drives)
+	app.drivesFetchedAt = flextime.Now()
+	return app.drivesCache, nil
 }
 
-func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error {
+func (app *App) maintenanceChannels(ctx context.Context) error {
 	if app.webhookAddress == "" {
-		return errors.New("webhook address is empty, plz check configure")
+		return fmt.Errorf("webhook address is empty")
 	}
 	itemsCh, err := app.storage.FindAllChannels(ctx)
 	if err != nil {
@@ -371,20 +280,19 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 	if err != nil {
 		return fmt.Errorf("get DriveIDs: %w", err)
 	}
-	existsDriveIDs := lo.FromEntries(lo.Map(driveIDs, func(driveID string, _ int) lo.Entry[string, bool] {
-		return lo.Entry[string, bool]{
-			Key:   driveID,
-			Value: false,
-		}
-	}))
+	existsDriveIDs := KeyValues(driveIDs, func(driveID string) (string, bool) {
+		return driveID, false
+	})
+	notFoundDriveIDs := make(map[string]bool, len(driveIDs))
 	channelsByDriveID := make(map[string][]*ChannelItem, len(existsDriveIDs))
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
-			existsDriveIDs[item.DriveID] = true
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration, "created_at", item.CreatedAt)
+			if _, ok := existsDriveIDs[item.DriveID]; !ok {
+				notFoundDriveIDs[item.DriveID] = true
+			} else {
+				existsDriveIDs[item.DriveID] = true
+			}
 			channels, ok := channelsByDriveID[item.DriveID]
 			if !ok {
 				channels = make([]*ChannelItem, 0)
@@ -400,9 +308,9 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 		}
 		_driveID := driveID
 		egForNew.Go(func() error {
-			logx.Printf(egCtxForNew, "[info] channel not exist drive_id=%s, try create channel", _driveID)
+			slog.InfoContext(egCtxForNew, "channel not exist, try create channel", "drive_id", _driveID)
 			if err := app.CreateChannel(egCtxForNew, _driveID); err != nil {
-				logx.Printf(egCtxForNew, "[error] failed CreateChannel drive_id=%s", _driveID)
+				slog.ErrorContext(egCtxForNew, "failed CreateChannel", "drive_id", _driveID, "error", err)
 				return fmt.Errorf("CreateChannel:%w", err)
 			}
 			return nil
@@ -424,7 +332,7 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 			continue
 		}
 		egForRotate.Go(func() error {
-			logx.Printf(egCtxForRotate, "[info] try rotation drive_id=%s", _driveID)
+			slog.InfoContext(egCtxForRotate, "try rotation", "drive_id", _driveID)
 			if len(rotationTargets) == 0 {
 				return nil
 			}
@@ -436,12 +344,32 @@ func (app *App) maintenanceChannels(ctx context.Context, createOnly bool) error 
 			}
 			for _, cannel := range rotationTargets[1:] {
 				if err := app.DeleteChannel(egCtxForRotate, cannel); err != nil {
-					logx.Printf(egCtxForRotate, "[warn] cleanup failed drive_id=%s, channel_id=%s, resource_id=%s", _driveID, cannel.ChannelID, cannel.ResourceID)
+					slog.WarnContext(egCtxForRotate, "cleanup failed", "drive_id", _driveID, "channel_id", cannel.ChannelID, "resource_id", cannel.ResourceID)
 				}
 			}
 			return nil
 		})
-
+	}
+	egForDelete, egCtxForDelete := errgroup.WithContext(ctx)
+	for driveID, exists := range notFoundDriveIDs {
+		if !exists {
+			continue
+		}
+		_channels := channelsByDriveID[driveID]
+		if _channels == nil {
+			continue
+		}
+		_driveID := driveID
+		egForDelete.Go(func() error {
+			slog.InfoContext(egCtxForDelete, "drive not exist, try delete channel", "drive_id", _driveID)
+			for _, channel := range _channels {
+				if err := app.DeleteChannel(egCtxForDelete, channel); err != nil {
+					slog.WarnContext(egCtxForDelete, "failed DeleteChannel", "drive_id", _driveID, "channel_id", channel.ChannelID, "resource_id", channel.ResourceID)
+				}
+				slog.InfoContext(egCtxForDelete, "deleted channel", "drive_id", _driveID, "channel_id", channel.ChannelID, "resource_id", channel.ResourceID)
+			}
+			return nil
+		})
 	}
 	if err := egForNew.Wait(); err != nil {
 		return fmt.Errorf("NewChannel:%w", err)
@@ -471,11 +399,11 @@ func (app *App) getStartPageToken(ctx context.Context, driveID string) (string, 
 	}
 	token, err := getStartPageTokenCell.Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API changes:getStartPageToken failed:", err)
+		slog.DebugContext(ctx, "drive API changes:getStartPageToken failed", "error", err)
 		return "", fmt.Errorf("drive API changes:getStartPageToken:%w", err)
 	}
 	if token.HTTPStatusCode != http.StatusOK {
-		logx.Printf(ctx, "[debug] drive API changes:getStartPageToken response status not ok (status:%d)", token.HTTPStatusCode)
+		slog.DebugContext(ctx, "drive API changes:getStartPageToken response status not ok", "status", token.HTTPStatusCode)
 		return "", fmt.Errorf("drive API changes:getStartPageToken response status not ok (status:%d)", token.HTTPStatusCode)
 	}
 	return token.StartPageToken, nil
@@ -484,7 +412,7 @@ func (app *App) getStartPageToken(ctx context.Context, driveID string) (string, 
 func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 	uuidObj, err := uuid.NewRandom()
 	if err != nil {
-		logx.Println(ctx, "[debug] create new uuid v4: ", err)
+		slog.DebugContext(ctx, "create new uuid v4 failed", "error", err)
 		return fmt.Errorf(" create new uuid v4: %w", err)
 	}
 	now := flextime.Now()
@@ -508,47 +436,20 @@ func (app *App) createChannel(ctx context.Context, item *ChannelItem) error {
 	}
 	resp, err := watchCall.Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API changes:watch failed:", err)
+		slog.DebugContext(ctx, "drive API changes:watch failed", "error", err)
 		return fmt.Errorf("drive API changes:watch:%w", err)
 	}
 	if err != nil {
-		logx.Printf(ctx, "[debug] drive API changes:watch response status not ok (status:%d)", resp.HTTPStatusCode)
+		slog.DebugContext(ctx, "drive API changes:watch response status not ok", "status", resp.HTTPStatusCode)
 		return fmt.Errorf("drive API changes:watch response status not ok (status:%d)", resp.HTTPStatusCode)
 	}
 	item.ResourceID = resp.ResourceId
 	item.Expiration = time.UnixMilli(resp.Expiration)
-	logx.Printf(ctx, "[info] create channel id=%s, resource_id=%s, drive_id=%s page_token=%s, resource_uri=%s, expiration=%s",
-		resp.Id, resp.ResourceId, item.DriveID, item.PageToken, resp.ResourceUri, item.Expiration,
-	)
+	slog.InfoContext(ctx, "create channel", "id", resp.Id, "resource_id", resp.ResourceId, "drive_id", item.DriveID, "page_token", item.PageToken, "resource_uri", resp.ResourceUri, "expiration", item.Expiration)
 	if err := app.storage.SaveChannel(ctx, item); err != nil {
-		logx.Println(ctx, "[debug] save channel failed", err)
+		slog.DebugContext(ctx, "save channel failed", "error", err)
 		return fmt.Errorf("save channel:%w", err)
 	}
-	return nil
-}
-
-func (app *App) listChannels(ctx context.Context, w io.Writer) error {
-	itemsCh, err := app.storage.FindAllChannels(ctx)
-	if err != nil {
-		return fmt.Errorf("find all channels: %w", err)
-	}
-	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Channel ID", "Drive ID", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
-	for items := range itemsCh {
-		for _, item := range items {
-			table.Append([]string{
-				item.ChannelID,
-				item.DriveID,
-				item.PageToken,
-				item.Expiration.Format(time.RFC3339),
-				item.ResourceID,
-				item.PageTokenFetchedAt.Format(time.RFC3339),
-				item.CreatedAt.Format(time.RFC3339),
-				item.UpdatedAt.Format(time.RFC3339),
-			})
-		}
-	}
-	table.Render()
 	return nil
 }
 
@@ -559,18 +460,12 @@ func (app *App) cleanupChannels(ctx context.Context) error {
 	}
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 			if err := app.DeleteChannel(ctx, item); err != nil {
-				logx.Printf(ctx, "[warn] failed DeleteChannel channel_id=%s, resource_id=%s, drive_id=%s", item.ChannelID, item.ResourceID, item.DriveID)
+				slog.WarnContext(ctx, "failed DeleteChannel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 				continue
 			}
-			logx.Printf(ctx,
-				"[info] deleted channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "deleted channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 		}
 	}
 	return nil
@@ -583,39 +478,22 @@ func (app *App) syncChannels(ctx context.Context) error {
 	}
 	for items := range itemsCh {
 		for _, item := range items {
-			logx.Printf(ctx,
-				"[info] find channel_id=%s, drive_id=%s, expiration=%s, created_at=%s",
-				item.ChannelID, item.DriveID, item.Expiration.Format(time.RFC3339), item.CreatedAt.Format(time.RFC3339),
-			)
+			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration.Format(time.RFC3339), "created_at", item.CreatedAt.Format(time.RFC3339))
 			changes, _, err := app.changesList(ctx, item)
 			if err != nil {
-				logx.Printf(ctx, "[warn] failed sync channel_id=%s, resource_id=%s, drive_id=%s", item.ChannelID, item.ResourceID, item.DriveID)
+				slog.WarnContext(ctx, "failed sync", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 				continue
 			}
 			if err != nil {
-				logx.Printf(ctx, "[warn] get changes list failed channel_id:%s resource_id:%s err:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-					err.Error(),
-				)
+				slog.WarnContext(ctx, "get changes list failed", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"), "error", err.Error())
 			}
 			if len(changes) > 0 {
-				logx.Printf(ctx, "[debug] send changes channel_id:%s resource_id:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-				)
+				slog.DebugContext(ctx, "send changes", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"))
 				if err := app.SendNotification(ctx, item, changes); err != nil {
-					logx.Printf(ctx, "[error] send changes failed channel_id:%s resource_id:%s err:%s",
-						coalesce(item.ChannelID, "-"),
-						coalesce(item.ResourceID, "-"),
-						err.Error(),
-					)
+					slog.ErrorContext(ctx, "send changes failed", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"), "error", err.Error())
 				}
 			} else {
-				logx.Printf(ctx, "[debug] no changes channel_id:%s resource_id:%s",
-					coalesce(item.ChannelID, "-"),
-					coalesce(item.ResourceID, "-"),
-				)
+				slog.DebugContext(ctx, "no changes", "channel_id", coalesce(item.ChannelID, "-"), "resource_id", coalesce(item.ResourceID, "-"))
 			}
 		}
 	}
@@ -623,15 +501,13 @@ func (app *App) syncChannels(ctx context.Context) error {
 }
 
 func (app *App) DeleteChannel(ctx context.Context, item *ChannelItem) error {
-	logx.Printf(ctx, "[info] delete channel id=%s, resource_id=%s, drive_id=%s page_token=%s",
-		item.ChannelID, item.ResourceID, item.DriveID, item.PageToken,
-	)
+	slog.InfoContext(ctx, "delete channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "page_token", item.PageToken)
 	err := app.driveSvc.Channels.Stop(&drive.Channel{
 		Id:         item.ChannelID,
 		ResourceId: item.ResourceID,
 	}).Context(ctx).Do()
 	if err != nil {
-		logx.Println(ctx, "[debug] drive API channels:stop failed:", err)
+		slog.DebugContext(ctx, "drive API channels:stop failed", "error", err)
 		var apiError *googleapi.Error
 		if !errors.As(err, &apiError) {
 			return fmt.Errorf("drive API channels:stop:%w", err)
@@ -639,12 +515,10 @@ func (app *App) DeleteChannel(ctx context.Context, item *ChannelItem) error {
 		if apiError.Code != http.StatusNotFound {
 			return fmt.Errorf("drive API channels:stop:%w", apiError)
 		}
-		logx.Printf(ctx, "[warn] channel is already stopped continue and storage try delete: channel id=%s, resource_id=%s, drive_id=%s",
-			item.ChannelID, item.ResourceID, item.DriveID,
-		)
+		slog.WarnContext(ctx, "channel is already stopped, continue and storage try delete", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	}
 	if err := app.storage.DeleteChannel(ctx, item); err != nil {
-		logx.Println(ctx, "[debug] delete channel failed", err)
+		slog.DebugContext(ctx, "delete channel failed", "error", err)
 		return fmt.Errorf("delete channel:%w", err)
 	}
 	return nil
@@ -655,41 +529,27 @@ const (
 )
 
 func (app *App) RotateChannel(ctx context.Context, item *ChannelItem) error {
-	logx.Printf(ctx, "[info] try rotate channel channel id=%s, resource_id=%s, drive_id=%s",
-		item.ChannelID, item.ResourceID, item.DriveID,
-	)
+	slog.InfoContext(ctx, "try rotate channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	newItem := *item
 	now := flextime.Now()
 	if now.Sub(item.PageTokenFetchedAt) >= pageTokenRefreshIntervalDays*24*time.Hour {
-		logx.Printf(ctx, "[info] 90 days have passed since the first acquisition of the PageToken, so try to re-acquire the PageToken: channel id=%s, resource_id=%s, drive_id=%s",
-			item.ChannelID, item.ResourceID, item.DriveID,
-		)
+		slog.InfoContext(ctx, "90 days have passed since the first acquisition of the PageToken, so try to re-acquire the PageToken", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 		token, err := app.getStartPageToken(ctx, item.DriveID)
 		if err != nil {
-			logx.Printf(ctx, "[error] re-acquire the PageToken failed: channel id=%s, resource_id=%s, drive_id=%s: %s",
-				item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-			)
-			logx.Printf(ctx, "[warn] PageToken is out of date and attempts to rotate: channel id=%s, resource_id=%s, drive_id=%s",
-				item.ChannelID, item.ResourceID, item.DriveID,
-			)
+			slog.ErrorContext(ctx, "re-acquire the PageToken failed", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
+			slog.WarnContext(ctx, "PageToken is out of date and attempts to rotate", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 		} else {
 			newItem.PageToken = token
 			newItem.PageTokenFetchedAt = now
 		}
 	}
 	if err := app.createChannel(ctx, &newItem); err != nil {
-		logx.Printf(ctx, "[error] failed rotate channel id=%s, resource_id=%s, drive_id=%s: %s",
-			item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-		)
+		slog.ErrorContext(ctx, "failed rotate channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 		return err
 	}
-	logx.Printf(ctx, "[info] success rotate channel old_channel_id=%s, new_channel_id=%s, drive_id=%s",
-		item.ChannelID, newItem.ChannelID, item.DriveID,
-	)
+	slog.InfoContext(ctx, "success rotate channel", "old_channel_id", item.ChannelID, "new_channel_id", newItem.ChannelID, "drive_id", item.DriveID)
 	if err := app.DeleteChannel(ctx, item); err != nil {
-		logx.Printf(ctx, "[error] failed delete old channel id=%s, resource_id=%s, drive_id=%s: %s",
-			item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-		)
+		slog.ErrorContext(ctx, "failed delete old channel", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 		return err
 	}
 	return nil
@@ -709,16 +569,14 @@ var changesFields = fmt.Sprintf("changes(%s)", strings.Join(
 ))
 
 func (app *App) ChangesList(ctx context.Context, channelID string) ([]*drive.Change, *ChannelItem, error) {
-	logx.Printf(ctx, "[debug] try FindOneByChannelID  channel id=%s", channelID)
+	slog.DebugContext(ctx, "try FindOneByChannelID", "channel_id", channelID)
 	item, err := app.storage.FindOneByChannelID(ctx, channelID)
-	logx.Printf(ctx, "[debug] finish FindOneByChannelID  channel id=%s err=%#v", channelID, err)
+	slog.DebugContext(ctx, "finish FindOneByChannelID", "channel_id", channelID, "error", err)
 	if err != nil {
-		logx.Printf(ctx, "[debug] failed FindOneByChannelID channel_id=%s err=%s", channelID, err.Error())
+		slog.DebugContext(ctx, "failed FindOneByChannelID", "channel_id", channelID, "error", err)
 		return nil, nil, err
 	}
-	logx.Printf(ctx, "[debug] try change list channel id=%s, resource_id=%s, drive_id=%s",
-		item.ChannelID, item.ResourceID, item.DriveID,
-	)
+	slog.DebugContext(ctx, "try change list", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID)
 	return app.changesList(ctx, item)
 }
 
@@ -737,18 +595,16 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 			call = call.DriveId(item.DriveID)
 		}
 		changeList, err := call.Context(ctx).Do()
-		logx.Printf(ctx, "[debug] try Drive API changes:list: channel_id=%s drive_id=%s page_token=%s", item.ChannelID, item.DriveID, pageToken)
+		slog.DebugContext(ctx, "Drive API changes:list", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken)
 		if err != nil {
-			logx.Printf(ctx, "[debug] failed Drive API changes:list channel id=%s, resource_id=%s, drive_id=%s: %s",
-				item.ChannelID, item.ResourceID, item.DriveID, err.Error(),
-			)
+			slog.DebugContext(ctx, "Drive API changes:list failed", "channel_id", item.ChannelID, "resource_id", item.ResourceID, "drive_id", item.DriveID, "error", err)
 			return err
 		}
-		logx.Printf(ctx, "[debug] success Drive API changes:list: channel_id=%s drive_id=%s, pageToken=%s changes=%d", item.ChannelID, item.DriveID, pageToken, len(changeList.Changes))
+		slog.DebugContext(ctx, "Drive API changes:list success", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken, "changes", len(changeList.Changes))
 		changes = append(changes, changeList.Changes...)
 		nextPageToken = changeList.NextPageToken
 		newStartPageToken = changeList.NewStartPageToken
-		logx.Printf(ctx, "[debug] Drive API changes:list: channel_id=%s drive_id=%s, next_page_token=%s  new_start_page_token=%s", item.ChannelID, item.DriveID, pageToken, newStartPageToken)
+		slog.DebugContext(ctx, "Drive API changes:list", "channel_id", item.ChannelID, "drive_id", item.DriveID, "page_token", pageToken, "next_page_token", newStartPageToken)
 		return nil
 	}
 	if err := process(ctx, item.PageToken); err != nil {
@@ -760,7 +616,7 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 			return nil, nil, err
 		}
 	}
-	logx.Printf(ctx, "[info] PageToken refresh channel_id=%s old_page_token=%s new_page_token=%s", item.ChannelID, item.PageToken, newStartPageToken)
+	slog.InfoContext(ctx, "PageToken refresh", "channel_id", item.ChannelID, "old_page_token", item.PageToken, "new_page_token", newStartPageToken)
 	newItem := *item
 	newItem.PageToken = newStartPageToken
 	newItem.UpdatedAt = flextime.Now()
@@ -771,30 +627,30 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 }
 
 func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
-	logx.Printf(ctx, "[debug] send notification for channel %s", item.ChannelID)
+	slog.DebugContext(ctx, "send notification for channel", "channel_id", item.ChannelID)
 	if app.withinModifiedTime == nil {
-		logx.Printf(ctx, "[debug] no filter send for %s", item.ChannelID)
+		slog.DebugContext(ctx, "no filter send", "channel_id", item.ChannelID)
 		return app.notification.SendChanges(ctx, item, changes)
 	}
-	logx.Printf(ctx, "[debug] try filter %s", item.ChannelID)
+	slog.DebugContext(ctx, "try filter", "channel_id", item.ChannelID)
 	now := time.Now()
-	filterd := make([]*drive.Change, 0, len(changes))
+	filtered := make([]*drive.Change, 0, len(changes))
 	for _, change := range changes {
 		if change.File == nil {
-			filterd = append(filterd, change)
+			filtered = append(filtered, change)
 			continue
 		}
-		logx.Printf(ctx, "[debug] try check modified time: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+		slog.DebugContext(ctx, "try check modified time", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 		t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
 		if err != nil {
-			filterd = append(filterd, change)
+			filtered = append(filtered, change)
 			continue
 		}
 		if now.Sub(t) > *app.withinModifiedTime {
-			logx.Printf(ctx, "[info] filterd changes item: id=%s modified_time=%s", change.File.Id, change.File.ModifiedTime)
+			slog.InfoContext(ctx, "filtered changes item", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 			continue
 		}
-		filterd = append(filterd, change)
+		filtered = append(filtered, change)
 	}
-	return app.notification.SendChanges(ctx, item, filterd)
+	return app.notification.SendChanges(ctx, item, filtered)
 }

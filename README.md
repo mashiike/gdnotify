@@ -5,7 +5,7 @@
 ![Github Actions test](https://github.com/mashiike/gdnotify/workflows/Test/badge.svg?branch=main)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/mashiike/gdnotify/blob/master/LICENSE)
 
-`gdnotify` is google drive change notifier for AWS
+`gdnotify` is a Google Drive change notifier for AWS.
 
 Changes that occur in Google Drive are notified through Amazon EventBridge.
 
@@ -19,71 +19,99 @@ $ brew install mashiike/tap/awstee
 
 [Releases](https://github.com/mashiike/awstee/releases)
 
-## Usage with AWS Lambda (serverless)
+## Usage 
 
-gdnotify works with AWS Lambda, Amazon EventBridge and Amazon DynamoDB.
+```
+$ gdnotify -h
+Usage: gdnotify <command> [flags]
 
-Lambda Function requires a webhook and a maintainer
+gdnotify is a tool for managing notification channels for Google Drive.
 
+Flags:
+  -h, --help                                         Show context-sensitive help.
+      --log-level="info"                             log level ($GDNOTIFY_LOG_LEVEL)
+      --log-format="text"                            log format ($GDNOTIFY_LOG_FORMAT)
+      --[no-]log-color                               enable color output ($GDNOTIFY_LOG_COLOR)
+      --version                                      show version
+      --storage-type="dynamodb"                      storage type ($GDNOTIFY_STORAGE_TYPE)
+      --storage-table-name="gdnotify"                dynamodb table name ($GDNOTIFY_DDB_TABLE_NAME)
+      --[no-]storage-auto-create                     auto create dynamodb table ($GDNOTIFY_DDB_AUTO_CREATE)
+      --storage-dynamo-db-endpoint=STRING            dynamodb endpoint ($GDNOTIFY_DDB_ENDPOINT)
+      --storage-data-file="gdnotify.dat"             file storage data file ($GDNOTIFY_FILE_STORAGE_DATA_FILE)
+      --storage-lock-file="gdnotify.lock"            file storage lock file ($GDNOTIFY_FILE_STORAGE_LOCK_FILE)
+      --notification-type="eventbridge"              notification type ($GDNOTIFY_NOTIFICATION_TYPE)
+      --notification-event-bus="default"             event bus name (eventbridge type only) ($GDNOTIFY_EVENTBRIDGE_EVENT_BUS)
+      --notification-event-file="gdnotify.json"      event file path (file type only) ($GDNOTIFY_EVENT_FILE)
+      --webhook=""                                   webhook address ($GDNOTIFY_WEBHOOK)
+      --expiration=168h                              channel expiration ($GDNOTIFY_EXPIRATION)
+      --within-modified-time=WITHIN-MODIFIED-TIME    within modified time, If the edit time is not within this time, notifications will not be sent ($GDNOTIFY_WITHIN_MODIFIED_TIME).
+
+Commands:
+  list [flags]
+    list notification channels
+
+  serve [flags]
+    serve webhook server
+
+  cleanup [flags]
+    remove all notification channels
+
+  sync [flags]
+    force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification
+
+Run "gdnotify <command> --help" for more information on a command.
+```
+
+Refer to the following document to prepare the permissions for Google Cloud. Please enable the Google Drive API v3 in the corresponding Google Cloud in advance.
+https://cloud.google.com/docs/authentication/application-default-credentials
+
+Start the server with `gdnotify` as follows.
+
+```
+$ go run cmd/gdnotify/main.go --storage-auto-create                  
+time=2025-03-13T19:29:17.799+09:00 level=INFO msg="check describe dynamodb table" table_name=gdnotify
+time=2025-03-13T19:29:18.379+09:00 level=INFO msg="starting up with local httpd :25254"
+```
+
+By default, the server will start at `:25254`. By specifying the `--storage-auto-create` option, the DynamoDB table will be created automatically.
+
+Here, use the Tonnel function of VSCode, etc., to make it accessible from the outside.
+If it becomes accessible at an address like `https://xxxxxxxx-25254.asse.devtunnels.ms/`, access it as follows.
+
+```
+$ curl -X POST https://xxxxxxxx-25254.asse.devtunnels.ms/sync
+```
+
+Then, notifications to EventBridge will start.
+The following diagram illustrates what happens.
 
 ```mermaid
 sequenceDiagram
   autonumber
-  Maintainer lambda function->>+Google API: GET /drive/v3/changes/startPageToken
-  Google API-->>-Maintainer lambda function: PageToken
-  Maintainer lambda function->>+Google API: POST /drive/v3/changes/watch
-  Google API [push]--)Webhook lambda function:  sync request
-  Google API-->>-Maintainer lambda function: response
-  Maintainer lambda function->>+DynamoDB: put item
-  DynamoDB-->>-Maintainer lambda function: response
+  gdnotify [/sync]->>+Google API: GET /drive/v3/changes/startPageToken
+  Google API-->>-gdnotify [/sync]: PageToken
+  gdnotify [/sync]->>+Google API: POST /drive/v3/changes/watch
+  Google API [push]--)gdnotify [/]:  sync request
+  Google API-->>-gdnotify [/sync]: response
+  gdnotify [/sync]->>+DynamoDB: put item
+  DynamoDB-->>-gdnotify [/sync]: response
   loop
-    Google API [push]->>+Webhook lambda function: change request
-    Webhook lambda function->>+Google API: GET /drive/v3/changes
-    Google API-->>-Webhook lambda function: changes info
-    Webhook lambda function->>+EventBridge: Put Events
-    EventBridge-->>-Webhook lambda function: response
-    Webhook lambda function->>+DynamoDB: update item
-    DynamoDB-->>-Webhook lambda function: response
-    Webhook lambda function->>+Google API [push]: Status Ok
+    Google API [push]->>+gdnotify [/]: change request
+    gdnotify [/]->>+Google API: GET /drive/v3/changes
+    Google API-->>- gdnotify [/]: changes info
+     gdnotify [/]->>+EventBridge: Put Events
+    EventBridge-->>- gdnotify [/]: response
+     gdnotify [/]->>+DynamoDB: update item
+    DynamoDB-->>- gdnotify [/]: response
+    gdnotify [/]->>+Google API [push]: Status Ok
   end
 ```
 
+## Usage with AWS Lambda
 
-The basic configuration file is as follows:
-```yaml
-required_version: ">=0.0.0"
+`gdnotify` can run as a Lambda runtime. Therefore, by deploying the binary as a Lambda function, you can easily receive Google Drive change notifications via EventBridge.
 
-webhook: "{{ env `WEBHOOK_LAMBDA_URL`}}" #webhook mode lambda function URL
-expiration: 168h
-
-# backend setting to get GOOGLE_APPLICATION_CREDENTIALS.
-# Default is None, in which case https://cloud.google.com/docs/authentication/production 
-# If you want to use AWS Secrets Manager, set the backend_type to SSMParameterStore and specify the parameter_name according to the following
-https://docs.aws.amazon.com/systems-manager/latest/userguide/integration-ps-secretsmanager.html
-credentials:
-  backend_type: SSMParameterStore                               
-  parameter_name: /gdnotify/GOOGLE_APPLICATION_CREDENTIALS #SSM Parameter Name
-  base64encoding: false # If the Parameter Store value is base64encoded, set this value to true
-
-# Storage settings for storing the status of notification channels.
-# Default type is DynamoDB
-storage:
-  type: DynamoDB
-  table_name: gdnotify # DynamoDB Table Name
-
-# Set the recipients to be notified of detected changes
-# Default type is EventBridge
-notification:
-  type: EventBridge
-  event_bus: gdnotify # Event Bus Name. Although it is possible to use the `default`, it is recommended to create and use a custom event bus.
-
-drives:
-  - drive_id: __default__   # __default__ is a special setting, indicating a drive that is not tied to a specific Drive, 
-                            # but can be sensed with the given permissions. (For example, files that reside in MyDrive)
-  - drive_id: XXXXXXXXXXXXXXXXXXX  # Usually, you should specify the DriveID of the team drive
-```
-
-Let's solidify the Lambda package with the following configuration (runtime `provided.al2`)
+Let's solidify the Lambda package with the following configuration (runtime `provided.al2023`)
 
 ```
 lambda.zip
@@ -91,18 +119,8 @@ lambda.zip
 └── config.yaml  # configuration file
 ```
 
-A related document is [https://docs.aws.amazon.com/lambda/latest/dg/runtimes-custom.html](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-custom.html)
+The IAM permissions required are as follows, in addition to AWSLambdaBasicExecutionRole:
 
-### Webhook lambda function 
-
-The Webhook's Lambda function receives notifications from the Google API. It then puts the Event into the EventBus of Amazon EventBridge.
-
-Set the following environment variables:
-
-- `GDNOTIFY_RUN_MODE`=webhook
-- `GDNOTIFY_CONFIG`=config.yaml
-
-The required IAM Role permissions are as follows.
 ```json
 {
     "Version": "2012-10-17",
@@ -114,39 +132,7 @@ The required IAM Role permissions are as follows.
                 "events:PutEvents",
                 "dynamodb:DescribeTable",
                 "dynamodb:GetItem",
-                "dynamodb:UpdateItem"
-            ],
-            "Resource": [
-                "*"
-            ]
-        }
-    ]
-}
-```
-
-It is necessary to set up a Lambda Function URL, or API gateway, ALB, etc.
-Here, the Lambda Function URL is assumed to be simple.
-lambda function URLs document is [https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html)
-Suppose you get the following URL: `https://xxxxxxxxxxxx.lambda-url.ap-northeast-1.on.aws`
-
-### Maintainer lambda function
-Maintainer's Lambda function registers a notification channel with the Google API. It is assumed that this Lambda function will be called at regular intervals to perform maintenance tasks such as re-registering those newly added to the monitoring or those about to expire at that time.
-
-Set the following environment variables:
-
-- `GDNOTIFY_RUN_MODE`=maintainer
-- `GDNOTIFY_CONFIG`=config.yaml
-- `WEBHOOK_LAMBDA_URL`=https://xxxxxxxxxxxx.lambda-url.ap-northeast-1.on.aws
-
-The required IAM Role permissions are as follows.
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "Webhook",
-            "Effect": "Allow",
-            "Action": [
+                "dynamodb:UpdateItem",
                 "dynamodb:CreateTable",
                 "dynamodb:PutItem",
                 "dynamodb:DeleteItem",
@@ -160,67 +146,84 @@ The required IAM Role permissions are as follows.
 }
 ```
 
-EventBridge scheduling rules are required.
-The following tutorial will help you set it up. https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-run-lambda-schedule.html
+A related document is [https://docs.aws.amazon.com/lambda/latest/dg/runtimes-custom.html](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-custom.html)
 
-## Usage as CLI
+When the Lambda function is invoked directly, it behaves as if a request was made to the `/sync` endpoint.
+It is recommended to periodically invoke the Lambda function using EventBridge Scheduler, etc.
+The `/sync` endpoint performs notification channel rotation and forced change notification synchronization.
 
-```shell
-gdnotify -config <config file> [options] [command]
-version: v0.0.0
+To receive change notifications from the Google Drive API, you need to set up a Lambda Function URL, API Gateway, ALB, etc.
+The simplest is the Lambda Function URL, so here is a reference link.
 
-commands:
-   list          list notification channels
-   serve         serve webhook server
-   register      register a new notification channel for a drive for which a notification channel has not yet been set
-   maintenance   re-register expired notification channels or register new unregistered channels.
-   cleanup       remove all notification channels
+lambda function URLs document is [https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html)
 
-options:
-  -config value
-        config list
-  -log-level string
-        run mode (default "info")
-  -port int
-        webhook httpd port
-  -run-mode string
-        run mode (cli|webhook|maintainer) (default "cli")
+## EventBridge Event Payload
+
+Finally, the notified event is notified with the following detail.
+
+```
+{
+  "subject": "File gdnotify (XXXXXXXXXX) changed by hoge [hoge@example.com] at 2022-06-15T00:03:45.843Z",
+  "entity": {
+    "id": "XXXXXXXXXX",
+    "kind": "drive#file",
+    "name": "gdnotify",
+    "createdTime": ""
+  },
+  "actor": {
+    "displayName": "hoge",
+    "emailAddress": "hoge@example.com",
+    "kind": "drive#user"
+  },
+  "change": {
+    "changeType": "file",
+    "file": {
+      "id": "XXXXXXXXXX",
+      "kind": "drive#file",
+      "lastModifyingUser": {
+        "displayName": "hoge",
+        "emailAddress": "hoge@example.com",
+        "kind": "drive#user"
+      },
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "modifiedTime": "2022-06-15T00:03:45.843Z",
+      "name": "gdnotify",
+      "size": "1500",
+      "version": "20"
+    },
+    "fileId": "XXXXXXXXXX",
+    "kind": "drive#change",
+    "time": "2022-06-15T00:03:55.849Z"
+  }
+}
 ```
 
-## For Local Development
+For example, if you set the following event pattern, all events will trigger the rule.
 
-```yaml
-required_version: ">=0.0.0"
-
-webhook: "{{ env `HTTP_TUNNEL_URL` }}"
-expiration: 168h
-
-storage:
-  type: File
-  data_file: data/storage.gob
-
-notification:
-  type: File
-  event_file: data/events.json
-
-drives:
-  - drive_id: __default__
+```json
+{
+    "source" : [{
+    "prefix" : "oss.gdnotify"
+    }]
+}
 ```
 
-It can be run locally using the cloudflare tunnel command or ngrok.
-For example
+If you specify the following event rule, you can narrow it down to only file-related notifications.
 
-```shell
-$ HTTP_TUNNEL="cloudflared tunnel --url localhost{{ .Address }}" GDNOTIFY_RUN_MODE=webhook go run cmd/gdnotify/main.go -config local.yaml -log-level debug
+```json
+{
+    "source": [{
+        "prefix":"oss.gdnotify"
+    }],
+    "detail":{
+        "subject":[{
+            "prefix": "File"
+        }]
+    }
+}
 ```
 
-see `tunnel.log`, get tunnel url 
-
-```shell 
-$  HTTP_TUNNEL_URL="https://..." go run cmd/gdnotify/main.go -config my-local/local.yaml -log-level debug maintenance
-$  HTTP_TUNNEL_URL="https://..." go run cmd/gdnotify/main.go -config my-local/local.yaml -log-level debug list
-$  HTTP_TUNNEL_URL="https://..." go run cmd/gdnotify/main.go -config my-local/local.yaml -log-level debug cleanup
-```
+Set any EventBridge rules and connect to the subsequent processing.
 
 ## LICENSE
 

@@ -1,0 +1,28 @@
+linters-settings:
+  gofmt:
+    simplify: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - revive
+    - gocyclo
+    - gofmt
+    - goimports
+    - unconvert
+    - ineffassign
+    - typecheck
+    - unused
+    - staticcheck
+
+run:
+  deadline: 10m
+
+issues:
+  exclude-dirs:
+    - vendor
+    - third_party
+  exclude-files:
+    - ".*\\.gen\\.go"
+    - ".*_test\\.go"

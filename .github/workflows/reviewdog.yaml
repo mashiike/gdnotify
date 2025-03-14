@@ -1,13 +1,42 @@
 name: reviewdog
 on: [pull_request]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
-  staticcheck:
-    name: staticcheck
+  golangci-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: reviewdog/action-staticcheck@v1
+      - uses: actions/checkout@v4
+      - name: golangci-lint
+        uses: reviewdog/action-golangci-lint@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          level: warning
+          golangci_lint_flags: "--config=.golangci.yaml --timeout 10m"
+          filter_mode: diff_context
           reporter: github-pr-review
-          fail_on_error: true
+          fail_level: error
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-pr-review
+          filter_mode: diff_context
+          fail_level: error
+
+  misspell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-misspell@v1
+        with:
+          reporter: github-pr-review
+          level: warning
+          filter_mode: diff_context
+          fail_level: error
