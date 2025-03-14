@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.5.0](https://github.com/mashiike/gdnotify/compare/v0.4.2...v0.5.0) - 2025-03-14
+- [Breaking Changes] Remake app by @mashiike in https://github.com/mashiike/gdnotify/pull/203
+- Bump google.golang.org/api from 0.225.0 to 0.226.0 by @dependabot in https://github.com/mashiike/gdnotify/pull/205
+
 ## [v0.4.2](https://github.com/mashiike/gdnotify/compare/v0.4.1...v0.4.2) - 2023-03-15
 - Bump github.com/aws/aws-sdk-go-v2/service/dynamodb from 1.18.5 to 1.19.1 by @dependabot in https://github.com/mashiike/gdnotify/pull/162
 - add log for ops, channel_expiration dump logs by @mashiike in https://github.com/mashiike/gdnotify/pull/168
