@@ -634,23 +634,23 @@ func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes
 	}
 	slog.DebugContext(ctx, "try filter", "channel_id", item.ChannelID)
 	now := time.Now()
-	filterd := make([]*drive.Change, 0, len(changes))
+	filtered := make([]*drive.Change, 0, len(changes))
 	for _, change := range changes {
 		if change.File == nil {
-			filterd = append(filterd, change)
+			filtered = append(filtered, change)
 			continue
 		}
 		slog.DebugContext(ctx, "try check modified time", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 		t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
 		if err != nil {
-			filterd = append(filterd, change)
+			filtered = append(filtered, change)
 			continue
 		}
 		if now.Sub(t) > *app.withinModifiedTime {
 			slog.InfoContext(ctx, "filtered changes item", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
 			continue
 		}
-		filterd = append(filterd, change)
+		filtered = append(filtered, change)
 	}
-	return app.notification.SendChanges(ctx, item, filterd)
+	return app.notification.SendChanges(ctx, item, filtered)
 }
