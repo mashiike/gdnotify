@@ -13,7 +13,7 @@ import (
 )
 
 func (app *App) setupRoute() {
-	app.router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	app.router.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, http.StatusOK, http.StatusText(http.StatusOK))
 	})
@@ -130,7 +130,7 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, http.StatusText(http.StatusOK))
 }
 
-func (app *App) handleSync(w http.ResponseWriter, r *http.Request) {
+func (app *App) handleSync(w http.ResponseWriter, _ *http.Request) {
 	ctx := context.Background()
 	var hasErr bool
 	if err := app.maintenanceChannels(ctx); err != nil {

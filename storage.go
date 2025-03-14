@@ -447,7 +447,7 @@ type FileStorage struct {
 	FilePath string
 }
 
-func NewFileStorage(ctx context.Context, cfg StorageOption) (*FileStorage, error) {
+func NewFileStorage(_ context.Context, cfg StorageOption) (*FileStorage, error) {
 	s := &FileStorage{
 		FilePath: cfg.DataFile,
 		LockFile: cfg.LockFile,

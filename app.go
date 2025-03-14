@@ -283,13 +283,13 @@ func (app *App) maintenanceChannels(ctx context.Context) error {
 	existsDriveIDs := KeyValues(driveIDs, func(driveID string) (string, bool) {
 		return driveID, false
 	})
-	notFoundDriveIds := make(map[string]bool, len(driveIDs))
+	notFoundDriveIDs := make(map[string]bool, len(driveIDs))
 	channelsByDriveID := make(map[string][]*ChannelItem, len(existsDriveIDs))
 	for items := range itemsCh {
 		for _, item := range items {
 			slog.InfoContext(ctx, "find channel", "channel_id", item.ChannelID, "drive_id", item.DriveID, "expiration", item.Expiration, "created_at", item.CreatedAt)
 			if _, ok := existsDriveIDs[item.DriveID]; !ok {
-				notFoundDriveIds[item.DriveID] = true
+				notFoundDriveIDs[item.DriveID] = true
 			} else {
 				existsDriveIDs[item.DriveID] = true
 			}
@@ -351,7 +351,7 @@ func (app *App) maintenanceChannels(ctx context.Context) error {
 		})
 	}
 	egForDelete, egCtxForDelete := errgroup.WithContext(ctx)
-	for driveID, exists := range notFoundDriveIds {
+	for driveID, exists := range notFoundDriveIDs {
 		if !exists {
 			continue
 		}

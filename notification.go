@@ -46,7 +46,7 @@ type EventBridgeNotification struct {
 	eventBus string
 }
 
-func NewEventBridgeNotification(ctx context.Context, cfg NotificationOption) (Notification, error) {
+func NewEventBridgeNotification(_ context.Context, cfg NotificationOption) (Notification, error) {
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ type FileNotification struct {
 	eventFile string
 }
 
-func NewFileNotification(ctx context.Context, cfg NotificationOption) (*FileNotification, error) {
+func NewFileNotification(_ context.Context, cfg NotificationOption) (*FileNotification, error) {
 	n := &FileNotification{
 		eventFile: cfg.EventFile,
 	}
