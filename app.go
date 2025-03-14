@@ -149,9 +149,9 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 		slog.WarnContext(ctx, "get DriveIDs failed", "error", err)
 	}
 	exitsDrive := make(map[string]bool, len(drives))
-	driveNameById := make(map[string]string, len(drives))
+	driveNameByID := make(map[string]string, len(drives))
 	for _, drive := range drives {
-		driveNameById[drive.Id] = drive.Name
+		driveNameByID[drive.Id] = drive.Name
 		exitsDrive[drive.Id] = false
 	}
 	table := tablewriter.NewWriter(w)
@@ -159,7 +159,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 	for items := range itemsCh {
 		for _, item := range items {
 			exitsDrive[item.DriveID] = true
-			driveName, ok := driveNameById[item.DriveID]
+			driveName, ok := driveNameByID[item.DriveID]
 			if !ok {
 				driveName = "-"
 			}
@@ -183,7 +183,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 		table.Append([]string{
 			"-",
 			driveID,
-			driveNameById[driveID],
+			driveNameByID[driveID],
 			"-",
 			"-",
 			"-",
