@@ -10,7 +10,6 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/fatih/color"
 	"github.com/mashiike/gcreds4aws"
-	"github.com/mashiike/sloglevel"
 	"github.com/mashiike/slogutils"
 )
 
@@ -56,14 +55,14 @@ func (c *CLI) Run(ctx context.Context) int {
 	}
 	logger := newLogger(logLevel, c.LogFormat, c.LogColor)
 	slog.SetDefault(logger)
-	if err := c.run(ctx, k, logger); err != nil {
+	if err := c.run(ctx, k); err != nil {
 		slog.Error("runtime error", "details", err)
 		return 1
 	}
 	return 0
 }
 
-func (c *CLI) run(ctx context.Context, k *kong.Context, logger *slog.Logger) error {
+func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 	var err error
 	cmd := k.Command()
 	if cmd == "version" {
@@ -108,8 +107,6 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	return New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
 }
 
-var LevelNotice slog.Level = slog.LevelInfo + 2
-
 func newLogger(level slog.Level, format string, c bool) *slog.Logger {
 	var f func(io.Writer, *slog.HandlerOptions) slog.Handler
 	switch format {
@@ -127,10 +124,13 @@ func newLogger(level slog.Level, format string, c bool) *slog.Logger {
 		modifierFuncs = map[slog.Level]slogutils.ModifierFunc{
 			slog.LevelDebug: slogutils.Color(color.FgBlack),
 			slog.LevelInfo:  nil,
-			LevelNotice:     slogutils.Color(color.FgHiBlue),
 			slog.LevelWarn:  slogutils.Color(color.FgYellow),
 			slog.LevelError: slogutils.Color(color.FgRed, color.Bold),
 		}
+	}
+	var addSource bool
+	if level == slog.LevelDebug {
+		addSource = true
 	}
 	middleware := slogutils.NewMiddleware(
 		f,
@@ -138,20 +138,16 @@ func newLogger(level slog.Level, format string, c bool) *slog.Logger {
 			Writer:        os.Stderr,
 			ModifierFuncs: modifierFuncs,
 			HandlerOptions: &slog.HandlerOptions{
-				Level: level,
-				ReplaceAttr: sloglevel.NewAttrReplacer(
-					sloglevel.AddLevel(LevelNotice, "NOTICE"),
-				),
-				AddSource: true,
+				Level:     level,
+				AddSource: addSource,
 			},
 			RecordTransformerFuncs: []slogutils.RecordTransformerFunc{
 				slogutils.ConvertLegacyLevel(
 					map[string]slog.Level{
-						"debug":  slog.LevelDebug,
-						"info":   slog.LevelInfo,
-						"notice": LevelNotice,
-						"warn":   slog.LevelWarn,
-						"error":  slog.LevelError,
+						"debug": slog.LevelDebug,
+						"info":  slog.LevelInfo,
+						"warn":  slog.LevelWarn,
+						"error": slog.LevelError,
 					},
 					true,
 				),

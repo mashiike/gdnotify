@@ -154,11 +154,11 @@ type Storage interface {
 	DeleteChannel(context.Context, *ChannelItem) error
 }
 
-type ChannelNotFound struct {
+type ChannelNotFoundError struct {
 	ChannelID string
 }
 
-func (err *ChannelNotFound) Error() string {
+func (err *ChannelNotFoundError) Error() string {
 	return fmt.Sprintf("channel_id:%s not found", err.ChannelID)
 }
 
@@ -433,7 +433,7 @@ func (s *DynamoDBStorage) FindOneByChannelID(ctx context.Context, channelID stri
 	}
 	if output.Item == nil {
 		slog.WarnContext(ctx, "not found item", "channel_id", channelID, "table_name", s.tableName)
-		return nil, &ChannelNotFound{ChannelID: channelID}
+		return nil, &ChannelNotFoundError{ChannelID: channelID}
 	}
 	slog.DebugContext(ctx, "success get item", "channel_id", channelID, "table_name", s.tableName)
 	return NewChannelItemWithDynamoDBAttributeValues(output.Item), nil
@@ -493,7 +493,7 @@ func (s *FileStorage) UpdatePageToken(ctx context.Context, target *ChannelItem) 
 				return nil
 			}
 		}
-		return &ChannelNotFound{ChannelID: target.ChannelID}
+		return &ChannelNotFoundError{ChannelID: target.ChannelID}
 	})
 }
 
@@ -519,7 +519,7 @@ func (s *FileStorage) FindOneByChannelID(ctx context.Context, channelID string) 
 				return nil
 			}
 		}
-		return &ChannelNotFound{ChannelID: channelID}
+		return &ChannelNotFoundError{ChannelID: channelID}
 	}); err != nil {
 		slog.DebugContext(ctx, "failed read", "error", err)
 		return nil, err

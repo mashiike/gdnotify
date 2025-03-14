@@ -203,5 +203,5 @@ func TestDynamoDBStorage_DeleteChannel(t *testing.T) {
 
 	_, err = storage.FindOneByChannelID(ctx, "test-channel")
 	require.Error(t, err)
-	require.IsType(t, &gdnotify.ChannelNotFound{}, err)
+	require.IsType(t, &gdnotify.ChannelNotFoundError{}, err)
 }

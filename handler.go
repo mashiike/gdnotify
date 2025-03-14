@@ -2,6 +2,7 @@ package gdnotify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -102,6 +103,13 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(ctx, "Change accepted", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
 	changes, item, err := app.ChangesList(ctx, channelID)
 	if err != nil {
+		var notFoundErr *ChannelNotFoundError
+		if errors.As(err, &notFoundErr) {
+			slog.WarnContext(ctx, "Channel not found", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
+			w.WriteHeader(http.StatusOK)
+			io.WriteString(w, http.StatusText(http.StatusOK))
+			return
+		}
 		slog.ErrorContext(ctx, "Failed to get changes list", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"), "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, http.StatusText(http.StatusInternalServerError))
