@@ -16,11 +16,9 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mashiike/gcreds4aws v0.1.2
-	github.com/mashiike/sloglevel v0.1.0
 	github.com/mashiike/slogutils v0.4.0
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/samber/lo v1.49.1
 	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.3.1
 	github.com/stretchr/testify v1.10.0
