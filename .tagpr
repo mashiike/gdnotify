@@ -28,4 +28,4 @@
 [tagpr]
 	vPrefix = true
 	releaseBranch = main
-	versionFile = version.go
+	versionFile = version.go,lambda/Taskfile.yaml
