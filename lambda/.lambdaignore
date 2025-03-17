@@ -1,0 +1,14 @@
+.terraform/*
+*.tfstate
+*.tf
+*.tfstate.backup
+Taskfile.yaml
+*dummy.zip
+.gitignore
+*.jsonenet
+tmp/*
+aqua.yaml
+function.jsonnet
+function_url.jsonnet
+.terraform.lock.hcl
+.lambdaignore

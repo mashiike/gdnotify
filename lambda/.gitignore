@@ -1,0 +1,6 @@
+config.tf
+.terraform
+*.tfstate
+dummy.zip
+tmp/
+bootstrap
