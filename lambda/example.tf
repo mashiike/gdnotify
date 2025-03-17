@@ -36,6 +36,7 @@ resource "aws_iam_role_policy" "main" {
         Action = [
           "dynamodb:PutItem",
           "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
           "dynamodb:CreateTable",
           "dynamodb:DescribeTable",
           "dynamodb:DescribeTimeToLive",
