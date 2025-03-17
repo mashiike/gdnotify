@@ -33,7 +33,7 @@ tasks:
       - download
     cmds:
       - task: lambda:diff
-      - aqua exec lambroll deploy  --keep-versions 10 --function-url function_url.jsonnet
+      - aqua exec lambroll deploy --function-url=function_url.jsonnet
       - task: clean
 
   lambda:deploy-dry-run:
@@ -42,8 +42,7 @@ tasks:
       - download
     cmds:
       - task: lambda:diff
-      - aqua exec lambroll deploy --dry-run --log-level debug --function-url function_url.jsonnet
-
+      - aqua exec lambroll deploy --dry-run --function-url=function_url.jsonnet --log-level debug
   lambda:rollback:
     desc: Rollback the deployment.
     prompt: Are you sure you want to rollback the deployment on AWS?
