@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.5.3](https://github.com/mashiike/gdnotify/compare/v0.5.2...v0.5.3) - 2025-03-17
+- add UpdateItem by @mashiike in https://github.com/mashiike/gdnotify/pull/211
+- Feature/fix example by @mashiike in https://github.com/mashiike/gdnotify/pull/213
+
 ## [v0.5.2](https://github.com/mashiike/gdnotify/compare/v0.5.1...v0.5.2) - 2025-03-17
 - Feature/add lambda sample by @mashiike in https://github.com/mashiike/gdnotify/pull/208
 - webhook address get from lambda function url config by @mashiike in https://github.com/mashiike/gdnotify/pull/210
