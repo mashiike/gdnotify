@@ -1,0 +1,87 @@
+version: '3'
+
+vars:
+  GDNOTIFY_VERSION: 0.5.1
+
+tasks:
+  download:
+    generates:
+      - bootstrap
+    status:
+      - test -f bootstrap
+    cmds:
+      - mkdir -p tmp/
+      - |
+        cd tmp/ && \
+        wget -q https://github.com/mashiike/gdnotify/releases/download/v{{.GDNOTIFY_VERSION}}/gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz && \
+        tar xvf gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz
+      - install -m 755 tmp/gdnotify bootstrap
+  build:
+    desc: Build the binary.
+    cmds:
+      - GOARCH=arm64 GOOS=linux go build -o bootstrap ../cmd/gdnotify/main.go
+
+  lambda:diff:
+    desc: Show deployment differences.
+    cmds:
+      - aqua exec lambroll diff
+
+  lambda:deploy:
+    desc: Deploy to AWS.
+    prompt: Are you sure you want to deploy to AWS?
+    deps:
+      - download
+    cmds:
+      - task: lambda:diff
+      - aqua exec lambroll deploy  --keep-versions 10 --function-url function_url.jsonnet
+      - task: clean
+
+  lambda:deploy-dry-run:
+    desc: Perform a dry-run deployment.
+    deps:
+      - download
+    cmds:
+      - task: lambda:diff
+      - aqua exec lambroll deploy --dry-run --log-level debug --function-url function_url.jsonnet
+
+  lambda:rollback:
+    desc: Rollback the deployment.
+    prompt: Are you sure you want to rollback the deployment on AWS?
+    cmds:
+      - aqua exec lambroll rollback --function-url function_url.jsonnet
+
+  clean:
+    desc: Remove generated files like bootstrap.
+    cmds:
+      - rm -f bootstrap
+      - rm -rf tmp
+      - rm -rf dummy.zip
+
+  lambda:logs:
+    desc: Show logs of gloria.
+    cmds:
+      - aqua exec lambroll logs --follow
+
+  terraform:lock:
+    desc: Update the lock of Terraform providers.
+    cmds:
+      - |
+        aqua exec terraform providers lock \
+          -platform=darwin_amd64 \
+          -platform=darwin_arm64 \
+          -platform=linux_amd64 \
+          -platform=linux_arm64 \
+          -platform=windows_amd64
+  terraform:init:
+    desc: Execute terraform init.
+    cmds:
+      - task: terraform:lock
+      - aqua exec terraform init --upgrade
+  terraform:plan:
+    desc: Execute terraform plan. This is for local use.
+    cmds:
+      - aqua exec terraform plan
+  terraform:apply:
+    desc: Execute terraform apply. This is for local use.
+    cmds:
+      - aqua exec terraform apply
