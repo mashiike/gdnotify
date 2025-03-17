@@ -82,12 +82,12 @@ func (app *App) checkWebhookAddress(r *http.Request) {
 		slog.Warn("unexpected invoked function arn resource", "resource", arnObj.Resource)
 		return
 	}
-	var functionName, quorifier *string
+	var functionName, qualifier *string
 	if len(parts) == 2 {
 		functionName = aws.String(parts[1])
 	} else {
 		functionName = aws.String(parts[1])
-		quorifier = aws.String(parts[2])
+		qualifier = aws.String(parts[2])
 	}
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
@@ -97,10 +97,10 @@ func (app *App) checkWebhookAddress(r *http.Request) {
 	client := lambda.NewFromConfig(awsCfg)
 	output, err := client.GetFunctionUrlConfig(r.Context(), &lambda.GetFunctionUrlConfigInput{
 		FunctionName: functionName,
-		Qualifier:    quorifier,
+		Qualifier:    qualifier,
 	})
 	if err != nil {
-		slog.Warn("failed to get function url config", "error", err, "function_name", functionName, "qualifier", quorifier)
+		slog.Warn("failed to get function url config", "error", err, "function_name", functionName, "qualifier", qualifier)
 		return
 	}
 	if output.FunctionUrl == nil {
