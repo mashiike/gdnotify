@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.1](https://github.com/mashiike/gdnotify/compare/v0.5.0...v0.5.1) - 2025-03-17
+- Feature/fix goreleaser by @mashiike in https://github.com/mashiike/gdnotify/pull/206
+
 ## [v0.5.0](https://github.com/mashiike/gdnotify/compare/v0.4.2...v0.5.0) - 2025-03-14
 - [Breaking Changes] Remake app by @mashiike in https://github.com/mashiike/gdnotify/pull/203
 - Bump google.golang.org/api from 0.225.0 to 0.226.0 by @dependabot in https://github.com/mashiike/gdnotify/pull/205
