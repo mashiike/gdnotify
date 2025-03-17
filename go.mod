@@ -15,7 +15,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/mashiike/gcreds4aws v0.1.3
+	github.com/mashiike/gcreds4aws v0.1.4
 	github.com/mashiike/slogutils v0.4.0
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v0.0.5
