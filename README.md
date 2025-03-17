@@ -115,9 +115,10 @@ Let's solidify the Lambda package with the following configuration (runtime `pro
 
 ```
 lambda.zip
-├── bootstrap    # build binary
-└── config.yaml  # configuration file
+└── bootstrap    # build binary
 ```
+
+For more details, refer to [Lambda Example](./lambda/).
 
 The IAM permissions required are as follows, in addition to AWSLambdaBasicExecutionRole:
 
