@@ -170,7 +170,7 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(changes) > 0 {
-		slog.DebugContext(ctx, "Sending changes", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
+		slog.InfoContext(ctx, "Sending changes", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
 		if err := app.SendNotification(ctx, item, changes); err != nil {
 			slog.ErrorContext(ctx, "Failed to send changes", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"), "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -178,7 +178,7 @@ func (app *App) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		slog.DebugContext(ctx, "No changes", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
+		slog.InfoContext(ctx, "No changes", "channel_id", coalesce(channelID, "-"), "resource_id", coalesce(resourceID, "-"))
 	}
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, http.StatusText(http.StatusOK))
