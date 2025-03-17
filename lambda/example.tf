@@ -40,6 +40,8 @@ resource "aws_iam_role_policy" "main" {
           "dynamodb:DescribeTable",
           "dynamodb:DescribeTimeToLive",
           "dynamodb:UpdateTimeToLive",
+          "dynamodb:Scan",
+          "dynamodb:DeleteItem",
         ],
         Effect   = "Allow"
         Resource = "*",
@@ -91,7 +93,7 @@ resource "aws_lambda_alias" "main" {
 
 resource "aws_ssm_parameter" "google_application_credentials" {
   lifecycle {
-    ignore_changes = [ value ]
+    ignore_changes = [value]
   }
   name        = "/gdnotify/GOOGLE_APPLICATION_CREDENTIALS"
   description = "GOOGLE_APPLICATION_CREDENTIALS for gdnotify"

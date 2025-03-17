@@ -1,11 +1,11 @@
 ## Lambda Example
 
-必要なツールは以下です。
+The necessary tools are as follows:
 
 - https://aquaproj.github.io/
 - https://taskfile.dev/
 
-デプロイは以下のコマンドで行います。
+Deploy using the following commands:
 
 ```sh
 $ task terraform:init

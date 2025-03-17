@@ -5,6 +5,10 @@ vars:
 
 tasks:
   download:
+    generates:
+      - bootstrap
+    status:
+      - test -f bootstrap
     cmds:
       - mkdir -p tmp/
       - |
@@ -12,6 +16,10 @@ tasks:
         wget -q https://github.com/mashiike/gdnotify/releases/download/v{{.GDNOTIFY_VERSION}}/gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz && \
         tar xvf gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz
       - install -m 755 tmp/gdnotify bootstrap
+  build:
+    desc: Build the binary.
+    cmds:
+      - GOARCH=arm64 GOOS=linux go build -o bootstrap ../cmd/gdnotify/main.go
 
   lambda:diff:
     desc: Show deployment differences.
