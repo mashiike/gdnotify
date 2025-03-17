@@ -12,3 +12,4 @@ function.jsonnet
 function_url.jsonnet
 .terraform.lock.hcl
 .lambdaignore
+README.md

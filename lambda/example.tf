@@ -46,6 +46,13 @@ resource "aws_iam_role_policy" "main" {
         Effect   = "Allow"
         Resource = "*",
       },
+      {
+        Action = [
+          "lambda:GetFunctionUrlConfig",
+        ],
+        Effect   = "Allow"
+        Resource = "*",
+      },
     ]
   })
 }

@@ -10,6 +10,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 )
 
 func (app *App) setupRoute() {
@@ -54,7 +59,56 @@ func (app *App) checkWebhookAddress(r *http.Request) {
 		slog.Info("auto detected webhook address", "address", app.webhookAddress)
 		return
 	}
-	slog.Warn("failed to detect webhook address")
+	lctx, ok := lambdacontext.FromContext(r.Context())
+	if !ok {
+		slog.Warn("failed to detect webhook address")
+		return
+	}
+	slog.Info("try get webhook address from invoked lambda function url config ", "invoked_function_arn", lctx.InvokedFunctionArn)
+	arnObj, err := arn.Parse(lctx.InvokedFunctionArn)
+	if err != nil {
+		slog.Warn("failed to parse invoked function arn", "error", err)
+		return
+	}
+	// arn:aws:lambda:us-west-2:123456789012:function:my-function
+	// arn:aws:lambda:us-west-2:123456789012:function:my-function:qualifier
+	// part[0] is function
+	parts := strings.Split(arnObj.Resource, ":")
+	if len(parts) < 2 {
+		slog.Warn("failed to parse invoked function arn resource", "resource", arnObj.Resource)
+		return
+	}
+	if parts[0] != "function" {
+		slog.Warn("unexpected invoked function arn resource", "resource", arnObj.Resource)
+		return
+	}
+	var functionName, quorifier *string
+	if len(parts) == 2 {
+		functionName = aws.String(parts[1])
+	} else {
+		functionName = aws.String(parts[1])
+		quorifier = aws.String(parts[2])
+	}
+	awsCfg, err := loadAWSConfig()
+	if err != nil {
+		slog.Warn("failed to load aws config", "error", err)
+		return
+	}
+	client := lambda.NewFromConfig(awsCfg)
+	output, err := client.GetFunctionUrlConfig(r.Context(), &lambda.GetFunctionUrlConfigInput{
+		FunctionName: functionName,
+		Qualifier:    quorifier,
+	})
+	if err != nil {
+		slog.Warn("failed to get function url config", "error", err, "function_name", functionName, "qualifier", quorifier)
+		return
+	}
+	if output.FunctionUrl == nil {
+		slog.Warn("function url is nil")
+		return
+	}
+	slog.Info("auto detected webhook address from invoked lambda function url config", "address", *output.FunctionUrl)
+	app.webhookAddress = *output.FunctionUrl
 }
 
 func (app *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {

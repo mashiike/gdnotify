@@ -203,7 +203,7 @@ func (app *App) Serve(ctx context.Context, o ServeOption) error {
 		if err == nil && req.Method != "" && req.URL != nil && req.URL.Path != "" {
 			return req, nil
 		}
-		return http.NewRequest(http.MethodPost, "/sync", bytes.NewReader(event))
+		return http.NewRequestWithContext(ctx, http.MethodPost, "/sync", bytes.NewReader(event))
 	}
 	r.RunWithContext(ctx)
 	return nil
