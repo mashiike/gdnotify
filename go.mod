@@ -6,7 +6,6 @@ require (
 	github.com/Songmu/flextime v0.1.0
 	github.com/alecthomas/kong v1.9.0
 	github.com/aws/aws-lambda-go v1.47.0
-	github.com/aws/aws-sdk-go v1.55.6
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
@@ -25,7 +24,7 @@ require (
 	github.com/sebdah/goldie/v2 v2.5.3
 	github.com/shogo82148/go-retry v1.3.1
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sync v0.12.0
+	golang.org/x/sync v0.13.0
 	google.golang.org/api v0.226.0
 )
 
