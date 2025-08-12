@@ -4,9 +4,8 @@ go 1.24
 
 require (
 	github.com/Songmu/flextime v0.1.0
-	github.com/alecthomas/kong v1.9.0
+	github.com/alecthomas/kong v1.12.1
 	github.com/aws/aws-lambda-go v1.47.0
-	github.com/aws/aws-sdk-go v1.55.6
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
