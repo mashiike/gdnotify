@@ -19,7 +19,7 @@ type CLI struct {
 	LogColor      bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
 	Version       kong.VersionFlag   `help:"show version"`
 	Storage       StorageOption      `embed:"" prefix:"storage-"`
-	Nootification NotificationOption `embed:"" prefix:"notification-"`
+	Notification NotificationOption `embed:"" prefix:"notification-"`
 	AppOption     `embed:""`
 
 	List    ListOption    `cmd:"" help:"list notification channels"`
@@ -66,7 +66,7 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 	var err error
 	cmd := k.Command()
 	if cmd == "version" {
-		fmt.Printf("estellm version %s\n", Version)
+		fmt.Printf("gdnotify version %s\n", Version)
 		return nil
 	}
 	app, err := c.newApp(ctx)
@@ -78,7 +78,7 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 			slog.WarnContext(ctx, "app cleanup error", "details", err)
 		}
 		if err := gcreds4aws.Close(); err != nil {
-			slog.WarnContext(ctx, "gqreds cleanup error", "details", err)
+			slog.WarnContext(ctx, "gcreds cleanup error", "details", err)
 		}
 	}()
 	switch cmd {
@@ -100,7 +100,7 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Storage: %w", err)
 	}
-	notification, err := NewNotification(ctx, c.Nootification)
+	notification, err := NewNotification(ctx, c.Notification)
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
