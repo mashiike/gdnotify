@@ -17,16 +17,25 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
+// NotificationOption contains configuration for change event delivery.
+//
+// Supported notification types:
+//   - "eventbridge": Sends events to Amazon EventBridge (default, recommended for production)
+//   - "file": Writes events to a local JSON file (suitable for development)
 type NotificationOption struct {
 	Type      string `help:"notification type" default:"eventbridge" enum:"eventbridge,file" env:"GDNOTIFY_NOTIFICATION_TYPE"`
 	EventBus  string `help:"event bus name (eventbridge type only)" default:"default" env:"GDNOTIFY_EVENTBRIDGE_EVENT_BUS"`
 	EventFile string `help:"event file path (file type only)" default:"gdnotify.json" env:"GDNOTIFY_EVENT_FILE"`
 }
 
+// Notification defines the interface for delivering change events to downstream systems.
 type Notification interface {
+	// SendChanges delivers a batch of Google Drive changes for the given channel.
 	SendChanges(context.Context, *ChannelItem, []*drive.Change) error
 }
 
+// NewNotification creates a Notification implementation based on the configuration type.
+// Returns [EventBridgeNotification] for "eventbridge" or [FileNotification] for "file".
 func NewNotification(ctx context.Context, cfg NotificationOption) (Notification, error) {
 	switch cfg.Type {
 	case "eventbridge":
@@ -37,15 +46,22 @@ func NewNotification(ctx context.Context, cfg NotificationOption) (Notification,
 	return nil, errors.New("unknown storage type")
 }
 
+// EventBridgeClient is the interface for Amazon EventBridge operations.
+// This is satisfied by *eventbridge.Client.
 type EventBridgeClient interface {
 	PutEvents(ctx context.Context, params *eventbridge.PutEventsInput, optFns ...func(*eventbridge.Options)) (*eventbridge.PutEventsOutput, error)
 }
 
+// EventBridgeNotification implements Notification using Amazon EventBridge.
+//
+// Each Google Drive change is sent as a separate EventBridge event with
+// detail-type indicating the change type (e.g., "File Changed", "File Removed").
 type EventBridgeNotification struct {
 	client   EventBridgeClient
 	eventBus string
 }
 
+// NewEventBridgeNotification creates a new EventBridge-based notification sender.
 func NewEventBridgeNotification(_ context.Context, cfg NotificationOption) (Notification, error) {
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
@@ -58,12 +74,15 @@ func NewEventBridgeNotification(_ context.Context, cfg NotificationOption) (Noti
 	return n, nil
 }
 
+// TargetEntity represents the file or drive that was changed.
 type TargetEntity struct {
 	Id          string `json:"id"`
 	Kind        string `json:"kind"`
 	Name        string `json:"name"`
 	CreatedTime string `json:"createdTime"`
 }
+
+// ChangeEventDetail is the event payload sent to EventBridge.
 type ChangeEventDetail struct {
 	Subject string        `json:"subject"`
 	Entity  *TargetEntity `json:"entity"`
@@ -71,6 +90,7 @@ type ChangeEventDetail struct {
 	Change  *drive.Change `json:"change"`
 }
 
+// Event detail-type constants for EventBridge events.
 const (
 	DetailTypeFileRemoved  = "File Removed"
 	DetailTypeFileTrashed  = "File Move to trash"
@@ -251,10 +271,15 @@ func (n *EventBridgeNotification) SendChanges(ctx context.Context, item *Channel
 	return lastErr
 }
 
+// FileNotification implements Notification by writing events to a local JSON file.
+//
+// This is suitable for development and debugging. Events are appended to the file
+// as newline-delimited JSON (NDJSON format).
 type FileNotification struct {
 	eventFile string
 }
 
+// NewFileNotification creates a new file-based notification writer.
 func NewFileNotification(_ context.Context, cfg NotificationOption) (*FileNotification, error) {
 	n := &FileNotification{
 		eventFile: cfg.EventFile,

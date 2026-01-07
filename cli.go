@@ -13,6 +13,19 @@ import (
 	"github.com/mashiike/slogutils"
 )
 
+// CLI is the command-line interface for gdnotify.
+//
+// Use the Run method to execute the CLI:
+//
+//	var cli gdnotify.CLI
+//	ctx := context.Background()
+//	exitCode := cli.Run(ctx)
+//
+// Available commands:
+//   - serve: Start the webhook server (default)
+//   - list: List registered notification channels
+//   - sync: Force synchronization of all channels
+//   - cleanup: Remove all notification channels
 type CLI struct {
 	LogLevel     string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
 	LogFormat    string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
@@ -28,20 +41,26 @@ type CLI struct {
 	Sync    SyncOption    `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
 }
 
+// ListOption contains options for the list command.
 type ListOption struct {
 	Output io.Writer `kong:"-"`
 }
 
+// ServeOption contains options for the serve command.
 type ServeOption struct {
 	Port int `help:"webhook httpd port" default:"25254" env:"GDNOTIFY_PORT"`
 }
 
+// SyncOption contains options for the sync command.
 type SyncOption struct {
 }
 
+// CleanupOption contains options for the cleanup command.
 type CleanupOption struct {
 }
 
+// Run parses command-line arguments and executes the appropriate command.
+// Returns 0 on success, 1 on error.
 func (c *CLI) Run(ctx context.Context) int {
 	k := kong.Parse(c,
 		kong.Name("gdnotify"),

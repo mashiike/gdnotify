@@ -21,6 +21,11 @@ import (
 	"github.com/shogo82148/go-retry"
 )
 
+// StorageOption contains configuration for channel state storage.
+//
+// Supported storage types:
+//   - "dynamodb": Uses Amazon DynamoDB (default, recommended for production)
+//   - "file": Uses local file storage (suitable for development)
 type StorageOption struct {
 	Type             string `help:"storage type" default:"dynamodb" enum:"dynamodb,file" env:"GDNOTIFY_STORAGE_TYPE"`
 	TableName        string `help:"dynamodb table name" default:"gdnotify" env:"GDNOTIFY_DDB_TABLE_NAME"`
@@ -30,15 +35,19 @@ type StorageOption struct {
 	LockFile         string `help:"file storage lock file" default:"gdnotify.lock" env:"GDNOTIFY_FILE_STORAGE_LOCK_FILE"`
 }
 
+// ChannelItem represents a Google Drive push notification channel.
+//
+// Each channel monitors changes in a specific drive (or "My Drive" for DefaultDriveID)
+// and tracks the page token for incremental change fetching.
 type ChannelItem struct {
-	ChannelID          string
-	Expiration         time.Time
-	PageToken          string
-	ResourceID         string
-	DriveID            string
-	PageTokenFetchedAt time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ChannelID          string    // Unique identifier for this channel
+	Expiration         time.Time // When this channel expires
+	PageToken          string    // Token for fetching incremental changes
+	ResourceID         string    // Google's resource identifier for the channel
+	DriveID            string    // Target drive ID (or DefaultDriveID for personal drive)
+	PageTokenFetchedAt time.Time // When the page token was last fetched
+	CreatedAt          time.Time // Channel creation timestamp
+	UpdatedAt          time.Time // Last update timestamp
 }
 
 func (item *ChannelItem) IsAboutToExpired(ctx context.Context, remaining time.Duration) bool {
@@ -146,14 +155,23 @@ func (item *ChannelItem) ToDynamoDBAttributeValues() map[string]types.AttributeV
 	return values
 }
 
+// Storage defines the interface for persisting notification channel state.
+//
+// Implementations must be safe for concurrent access.
 type Storage interface {
+	// FindAllChannels returns a channel that yields batches of all stored channels.
 	FindAllChannels(context.Context) (<-chan []*ChannelItem, error)
+	// FindOneByChannelID retrieves a single channel by its ID.
 	FindOneByChannelID(context.Context, string) (*ChannelItem, error)
+	// UpdatePageToken updates the page token for an existing channel.
 	UpdatePageToken(context.Context, *ChannelItem) error
+	// SaveChannel creates or updates a channel.
 	SaveChannel(context.Context, *ChannelItem) error
+	// DeleteChannel removes a channel from storage.
 	DeleteChannel(context.Context, *ChannelItem) error
 }
 
+// ChannelNotFoundError is returned when a channel lookup fails.
 type ChannelNotFoundError struct {
 	ChannelID string
 }
@@ -162,6 +180,7 @@ func (err *ChannelNotFoundError) Error() string {
 	return fmt.Sprintf("channel_id:%s not found", err.ChannelID)
 }
 
+// ChannelAlreadyExists is returned when attempting to create a duplicate channel.
 type ChannelAlreadyExists struct {
 	ChannelID string
 }
@@ -170,6 +189,8 @@ func (err *ChannelAlreadyExists) Error() string {
 	return fmt.Sprintf("channel_id:%s already exists", err.ChannelID)
 }
 
+// NewStorage creates a Storage implementation based on the configuration type.
+// Returns [DynamoDBStorage] for "dynamodb" or [FileStorage] for "file".
 func NewStorage(ctx context.Context, cfg StorageOption) (Storage, error) {
 	switch cfg.Type {
 	case "dynamodb":
@@ -180,11 +201,18 @@ func NewStorage(ctx context.Context, cfg StorageOption) (Storage, error) {
 	return nil, errors.New("unknown storage type")
 }
 
+// DynamoDBStorage implements Storage using Amazon DynamoDB.
+//
+// This is the recommended storage backend for production deployments.
+// If AutoCreate is enabled in StorageOption, the table will be created
+// automatically if it doesn't exist.
 type DynamoDBStorage struct {
 	client    *dynamodb.Client
 	tableName string
 }
 
+// NewDynamoDBStorage creates a new DynamoDB-backed storage.
+// If cfg.AutoCreate is true and the table doesn't exist, it will be created.
 func NewDynamoDBStorage(ctx context.Context, cfg StorageOption) (*DynamoDBStorage, error) {
 	awsCfg, err := loadAWSConfig()
 	if err != nil {
@@ -439,6 +467,10 @@ func (s *DynamoDBStorage) FindOneByChannelID(ctx context.Context, channelID stri
 	return NewChannelItemWithDynamoDBAttributeValues(output.Item), nil
 }
 
+// FileStorage implements Storage using local file storage.
+//
+// This storage backend is suitable for development and testing.
+// It uses file locking to ensure safe concurrent access.
 type FileStorage struct {
 	mu    sync.Mutex
 	Items []*ChannelItem
@@ -447,6 +479,8 @@ type FileStorage struct {
 	FilePath string
 }
 
+// NewFileStorage creates a new file-based storage.
+// Data is persisted to cfg.DataFile using gob encoding.
 func NewFileStorage(_ context.Context, cfg StorageOption) (*FileStorage, error) {
 	s := &FileStorage{
 		FilePath: cfg.DataFile,
