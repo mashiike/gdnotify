@@ -1,3 +1,3 @@
 package gdnotify
 
-var Version = "v0.5.4"
+var Version = "v0.5.3"

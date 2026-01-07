@@ -1,9 +1,9 @@
-version: 1
-
+# This is an example goreleaser.yaml file with some sane defaults.
+# Make sure to check the documentation at http://goreleaser.com
+version: 2
 before:
   hooks:
     - go mod download
-
 builds:
   - env:
       - CGO_ENABLED=0
@@ -11,28 +11,24 @@ builds:
     binary: gdnotify
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
     goos:
+      - darwin
       - linux
       - windows
-      - darwin
     goarch:
       - amd64
       - arm64
-
+archives:
+  - name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - CREDITS
 release:
   prerelease: false
-
-archives:
-  - files:
-    - LICENSE
-    - README.md
-    - CHANGELOG.md
-    - CREDITS
-
-snapshot:
-  name_template: "{{ .Env.NIGHTLY_VERSION }}"
-
+checksum:
+  name_template: "checksums.txt"
 changelog:
   sort: asc
   filters:
