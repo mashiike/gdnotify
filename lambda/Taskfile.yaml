@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  GDNOTIFY_VERSION: 0.5.3
+  GDNOTIFY_VERSION: 0.5.4
 
 tasks:
   download:
