@@ -3,6 +3,14 @@
 ## [v0.5.4](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.5.4) - 2026-01-07
 - docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
 - chore: repository maintenance by @mashiike in https://github.com/mashiike/gdnotify/pull/262
+- Bump actions/checkout from 4 to 6 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/259
+- Bump actions/setup-go from 5 to 6 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/252
+- Bump github.com/sebdah/goldie/v2 from 2.5.3 to 2.8.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/255
+- Add optional S3 copy support for Drive changes by @mashiike in https://github.com/mashiike/gdnotify/pull/263
+
+## [v0.5.4](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.5.4) - 2026-01-07
+- docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
+- chore: repository maintenance by @mashiike in https://github.com/mashiike/gdnotify/pull/262
 
 ## [v0.5.4](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.5.4) - 2026-01-07
 - docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
