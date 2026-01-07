@@ -2,19 +2,16 @@
   "subject": "FileID XXXXXXXXXX changed at 2022-06-15T00:03:55.849Z",
   "entity": {
     "id": "XXXXXXXXXX",
-    "kind": "drive#file",
-    "name": "",
-    "createdTime": ""
+    "kind": "drive#file"
   },
   "actor": {
-    "displayName": "Unknown User",
-    "emailAddress": "",
-    "kind": "drive#user"
+    "kind": "drive#user",
+    "displayName": "Unknown User"
   },
   "change": {
-    "changeType": "file",
-    "fileId": "XXXXXXXXXX",
     "kind": "drive#change",
-    "time": "2022-06-15T00:03:55.849Z"
+    "changeType": "file",
+    "time": "2022-06-15T00:03:55.849Z",
+    "fileId": "XXXXXXXXXX"
   }
 }

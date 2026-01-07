@@ -1,11 +1,27 @@
 {
-  "changeType": "kind#change",
-  "drive": {
+  "actor": {
+    "displayName": "Unknown User",
+    "kind": "drive#user"
+  },
+  "change": {
+    "changeType": "kind#change",
+    "drive": {
+      "id": "drive1",
+      "kind": "kind#drive",
+      "name": ""
+    },
+    "file": {
+      "id": "file1",
+      "kind": "kind#file",
+      "mimeType": "",
+      "name": ""
+    },
+    "kind": "",
+    "time": ""
+  },
+  "entity": {
     "id": "drive1",
     "kind": "kind#drive"
   },
-  "file": {
-    "id": "file1",
-    "kind": "kind#file"
-  }
+  "subject": ""
 }

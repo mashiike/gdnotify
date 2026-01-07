@@ -158,11 +158,134 @@ The simplest is the Lambda Function URL, so here is a reference link.
 
 lambda function URLs document is [https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html)
 
+## S3 Copy Feature (Optional)
+
+gdnotify can optionally copy files from Google Drive to S3 when changes are detected. This eliminates the need for downstream Lambda functions to implement Google Drive API authentication and file download logic.
+
+### Enabling S3 Copy
+
+Use the `--s3-copy-config` flag to specify a YAML configuration file:
+
+```bash
+gdnotify serve --s3-copy-config=./s3copy.yaml
+```
+
+Or set the environment variable:
+
+```bash
+export GDNOTIFY_S3_COPY_CONFIG=./s3copy.yaml
+```
+
+### Configuration File Format
+
+The configuration file uses YAML with CEL (Common Expression Language) expressions for flexible rule-based copying.
+
+```yaml
+# s3copy.yaml
+
+# Default bucket and object key (used when rules don't specify them)
+bucket_name: env("GDNOTIFY_S3_BUCKET")
+object_key: '"files/" + entity.id + "/" + entity.name'
+
+rules:
+  # Google Slides -> Export as PDF
+  - when: change.file.mimeType == "application/vnd.google-apps.presentation"
+    export: pdf
+    object_key: '"slides/" + entity.id + "/" + entity.name + ".pdf"'
+
+  # Google Sheets -> Export as CSV
+  - when: change.file.mimeType == "application/vnd.google-apps.spreadsheet"
+    export: csv
+    object_key: '"sheets/" + entity.id + "/" + entity.name + ".csv"'
+
+  # Images -> Download as-is
+  - when: change.file.mimeType.startsWith("image/")
+    object_key: '"images/" + entity.id + "/" + entity.name'
+
+  # Skip large files (example)
+  - when: 'int(change.file.size) > 100 * 1024 * 1024'
+    skip: true
+```
+
+### Rule Evaluation
+
+1. Rules are evaluated top-to-bottom
+2. The first matching rule (where `when` evaluates to true) is applied
+3. If `skip: true`, the file is not copied to S3
+4. If no rule matches, the file is not copied
+5. Removed files (`change.removed = true`) are always skipped automatically
+
+### CEL Variables
+
+The following variables are available in CEL expressions:
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `subject` | string | Event subject line |
+| `entity.id` | string | File or Drive ID |
+| `entity.kind` | string | Entity kind (drive#file, drive#drive) |
+| `entity.name` | string | File or Drive name |
+| `actor.displayName` | string | User's display name |
+| `actor.emailAddress` | string | User's email address |
+| `change.changeType` | string | Change type (file, drive) |
+| `change.removed` | bool | Whether the file was removed |
+| `change.time` | string | Change timestamp |
+| `change.fileId` | string | File ID |
+| `change.file.mimeType` | string | File MIME type |
+| `change.file.size` | string | File size in bytes |
+| `change.file.name` | string | File name |
+
+### CEL Functions
+
+| Function | Description |
+|----------|-------------|
+| `env("VAR_NAME")` | Get environment variable value |
+| `startsWith(prefix)` | Check if string starts with prefix |
+| `endsWith(suffix)` | Check if string ends with suffix |
+| `contains(substr)` | Check if string contains substring |
+| `matches(regex)` | Check if string matches regex |
+
+### Export Formats
+
+For Google Workspace files that cannot be downloaded directly, use the `export` field:
+
+The default export format is `pdf` when `export` is omitted.
+
+| File Type | Export Options |
+|-----------|----------------|
+| Google Docs | `pdf`, `docx`, `txt`, `html`, `odt`, `rtf` |
+| Google Sheets | `pdf`, `xlsx`, `csv`, `ods` |
+| Google Slides | `pdf`, `pptx`, `odp` |
+| Google Drawings | `pdf`, `png`, `jpeg`, `svg` |
+
+### IAM Permissions for S3 Copy
+
+Add the following permissions to the Lambda execution role:
+
+```json
+{
+    "Action": [
+        "s3:PutObject",
+        "s3:GetObject"
+    ],
+    "Effect": "Allow",
+    "Resource": "arn:aws:s3:::your-bucket-name/*"
+}
+```
+
+### Validating Configuration
+
+You can validate your S3 copy configuration file:
+
+```bash
+gdnotify validate --s3-copy-config=./s3copy.yaml
+```
+
 ## EventBridge Event Payload
 
 Finally, the notified event is notified with the following detail.
 
-```
+```json
 {
   "subject": "File gdnotify (XXXXXXXXXX) changed by hoge [hoge@example.com] at 2022-06-15T00:03:45.843Z",
   "entity": {
@@ -195,9 +318,17 @@ Finally, the notified event is notified with the following detail.
     "fileId": "XXXXXXXXXX",
     "kind": "drive#change",
     "time": "2022-06-15T00:03:55.849Z"
+  },
+  "s3Copy": {
+    "s3Uri": "s3://my-bucket/sheets/XXXXXXXXXX/gdnotify.csv",
+    "contentType": "text/csv",
+    "size": 1234,
+    "copiedAt": "2022-06-15T00:03:56.123Z"
   }
 }
 ```
+
+Note: The `s3Copy` field is only present when S3 copy is enabled and the file matches a copy rule. If no rule matches or `skip: true`, this field will be absent.
 
 For example, if you set the following event pattern, all events will trigger the rule.
 

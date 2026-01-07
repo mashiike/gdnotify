@@ -2,20 +2,17 @@
   "subject": "DriveId XXXXXXXXXX was removed at 2022-06-15T00:03:55.849Z",
   "entity": {
     "id": "XXXXXXXXXX",
-    "kind": "drive#drive",
-    "name": "",
-    "createdTime": ""
+    "kind": "drive#drive"
   },
   "actor": {
-    "displayName": "Unknown User",
-    "emailAddress": "",
-    "kind": "drive#user"
+    "kind": "drive#user",
+    "displayName": "Unknown User"
   },
   "change": {
-    "changeType": "drive",
-    "driveId": "XXXXXXXXXX",
     "kind": "drive#change",
+    "changeType": "drive",
+    "time": "2022-06-15T00:03:55.849Z",
     "removed": true,
-    "time": "2022-06-15T00:03:55.849Z"
+    "driveId": "XXXXXXXXXX"
   }
 }

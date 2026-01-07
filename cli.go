@@ -26,6 +26,7 @@ import (
 //   - list: List registered notification channels
 //   - sync: Force synchronization of all channels
 //   - cleanup: Remove all notification channels
+//   - validate: Validate configuration files
 type CLI struct {
 	LogLevel     string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
 	LogFormat    string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
@@ -33,12 +34,14 @@ type CLI struct {
 	Version      kong.VersionFlag   `help:"show version"`
 	Storage      StorageOption      `embed:"" prefix:"storage-"`
 	Notification NotificationOption `embed:"" prefix:"notification-"`
+	S3CopyConfig string             `name:"s3-copy-config" help:"path to S3 copy configuration file" env:"GDNOTIFY_S3_COPY_CONFIG"`
 	AppOption    `embed:""`
 
-	List    ListOption    `cmd:"" help:"list notification channels"`
-	Serve   ServeOption   `cmd:"" help:"serve webhook server" default:"true"`
-	Cleanup CleanupOption `cmd:"" help:"remove all notification channels"`
-	Sync    SyncOption    `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
+	List     ListOption     `cmd:"" help:"list notification channels"`
+	Serve    ServeOption    `cmd:"" help:"serve webhook server" default:"true"`
+	Cleanup  CleanupOption  `cmd:"" help:"remove all notification channels"`
+	Sync     SyncOption     `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
+	Validate ValidateOption `cmd:"" help:"validate configuration files"`
 }
 
 // ListOption contains options for the list command.
@@ -57,6 +60,11 @@ type SyncOption struct {
 
 // CleanupOption contains options for the cleanup command.
 type CleanupOption struct {
+}
+
+// ValidateOption contains options for the validate command.
+type ValidateOption struct {
+	S3CopyConfig string `arg:"" name:"config-file" optional:"" help:"path to S3 copy configuration file (overrides --s3-copy-config)"`
 }
 
 // Run parses command-line arguments and executes the appropriate command.
@@ -88,6 +96,10 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 		fmt.Printf("gdnotify version %s\n", Version)
 		return nil
 	}
+	// validate command doesn't need App initialization
+	if cmd == "validate" || cmd == "validate <config-file>" {
+		return c.runValidate(ctx)
+	}
 	app, err := c.newApp(ctx)
 	if err != nil {
 		return fmt.Errorf("initialize: %w", err)
@@ -114,6 +126,45 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 	}
 }
 
+func (c *CLI) runValidate(ctx context.Context) error {
+	configPath := c.Validate.S3CopyConfig
+	if configPath == "" {
+		configPath = c.S3CopyConfig
+	}
+	if configPath == "" {
+		return fmt.Errorf("no configuration file specified; use --s3-copy-config or provide a path as argument")
+	}
+
+	env, err := NewCELEnv()
+	if err != nil {
+		return fmt.Errorf("create CEL environment: %w", err)
+	}
+
+	slog.InfoContext(ctx, "validating S3 copy configuration", "path", configPath)
+	cfg, err := LoadS3CopyConfig(configPath, env)
+	if err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
+	slog.InfoContext(ctx, "configuration is valid",
+		"rules", len(cfg.Rules),
+		"default_bucket", cfg.BucketName.Raw(),
+		"default_object_key_is_expr", cfg.ObjectKey.IsExpr(),
+	)
+
+	for i, rule := range cfg.Rules {
+		slog.InfoContext(ctx, "rule validated",
+			"index", i,
+			"when", rule.When.Raw(),
+			"skip", rule.Skip,
+			"export", rule.Export,
+		)
+	}
+
+	fmt.Println("✓ Configuration is valid")
+	return nil
+}
+
 func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	storage, err := NewStorage(ctx, c.Storage)
 	if err != nil {
@@ -123,7 +174,35 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
-	return New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
+	app, err := New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if c.S3CopyConfig != "" {
+		if err := c.setupS3Copier(ctx, app); err != nil {
+			return nil, fmt.Errorf("setup S3 copier: %w", err)
+		}
+	}
+	return app, nil
+}
+
+func (c *CLI) setupS3Copier(ctx context.Context, app *App) error {
+	env, err := NewCELEnv()
+	if err != nil {
+		return fmt.Errorf("create CEL environment: %w", err)
+	}
+	cfg, err := LoadS3CopyConfig(c.S3CopyConfig, env)
+	if err != nil {
+		return fmt.Errorf("load S3 copy config: %w", err)
+	}
+	awsCfg, err := loadAWSConfig()
+	if err != nil {
+		return fmt.Errorf("load AWS config: %w", err)
+	}
+	copier := NewS3Copier(cfg, env, app.driveSvc, awsCfg)
+	app.SetS3Copier(copier)
+	slog.InfoContext(ctx, "S3 copy enabled", "config", c.S3CopyConfig, "rules", len(cfg.Rules))
+	return nil
 }
 
 func newLogger(level slog.Level, format string, c bool) *slog.Logger {

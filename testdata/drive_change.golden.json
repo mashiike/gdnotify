@@ -3,23 +3,21 @@
   "entity": {
     "id": "XXXXXXXXXX",
     "kind": "drive#drive",
-    "name": "gdnotify",
-    "createdTime": ""
+    "name": "gdnotify"
   },
   "actor": {
-    "displayName": "Unknown User",
-    "emailAddress": "",
-    "kind": "drive#user"
+    "kind": "drive#user",
+    "displayName": "Unknown User"
   },
   "change": {
-    "changeType": "drive",
-    "drive": {
-      "id": "XXXXXXXXXX",
-      "kind": "drive#drive",
-      "name": "gdnotify"
-    },
-    "driveId": "XXXXXXXXXX",
     "kind": "drive#change",
-    "time": "2022-06-15T00:03:55.849Z"
+    "changeType": "drive",
+    "time": "2022-06-15T00:03:55.849Z",
+    "driveId": "XXXXXXXXXX",
+    "drive": {
+      "kind": "drive#drive",
+      "id": "XXXXXXXXXX",
+      "name": "gdnotify"
+    }
   }
 }
