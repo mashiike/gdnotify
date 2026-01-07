@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   GDNOTIFY_VERSION: 0.5.3
@@ -24,7 +24,7 @@ tasks:
   lambda:diff:
     desc: Show deployment differences.
     cmds:
-      - aqua exec lambroll diff
+      - aqua exec -- lambroll diff
 
   lambda:deploy:
     desc: Deploy to AWS.
@@ -33,7 +33,7 @@ tasks:
       - download
     cmds:
       - task: lambda:diff
-      - aqua exec lambroll deploy --function-url=function_url.jsonnet
+      - aqua exec -- lambroll deploy --function-url=function_url.jsonnet
       - task: clean
 
   lambda:deploy-dry-run:
@@ -42,12 +42,12 @@ tasks:
       - download
     cmds:
       - task: lambda:diff
-      - aqua exec lambroll deploy --dry-run --function-url=function_url.jsonnet --log-level debug
+      - aqua exec -- lambroll deploy --dry-run --function-url=function_url.jsonnet --log-level debug
   lambda:rollback:
     desc: Rollback the deployment.
     prompt: Are you sure you want to rollback the deployment on AWS?
     cmds:
-      - aqua exec lambroll rollback --function-url function_url.jsonnet
+      - aqua exec -- lambroll rollback --function-url function_url.jsonnet
 
   clean:
     desc: Remove generated files like bootstrap.
@@ -59,13 +59,13 @@ tasks:
   lambda:logs:
     desc: Show logs of gloria.
     cmds:
-      - aqua exec lambroll logs --follow
+      - aqua exec -- lambroll logs --follow
 
   terraform:lock:
     desc: Update the lock of Terraform providers.
     cmds:
       - |
-        aqua exec terraform providers lock \
+        aqua exec -- terraform providers lock \
           -platform=darwin_amd64 \
           -platform=darwin_arm64 \
           -platform=linux_amd64 \
@@ -75,12 +75,12 @@ tasks:
     desc: Execute terraform init.
     cmds:
       - task: terraform:lock
-      - aqua exec terraform init --upgrade
+      - aqua exec -- terraform init --upgrade
   terraform:plan:
     desc: Execute terraform plan. This is for local use.
     cmds:
-      - aqua exec terraform plan
+      - aqua exec -- terraform plan
   terraform:apply:
     desc: Execute terraform apply. This is for local use.
     cmds:
-      - aqua exec terraform apply
+      - aqua exec -- terraform apply
