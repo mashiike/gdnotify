@@ -1,4 +1,5 @@
 local caller = std.native('caller_identity')();
+local must_env = std.native('must_env');
 {
   Description: 'Example of gdnotify',
   Architectures: ['arm64'],
@@ -10,6 +11,8 @@ local caller = std.native('caller_identity')();
       GDNOTIFY_LOG_LEVEL: 'info',
       GDNOTIFY_EXPIRATION: '168h',
       GDNOTIFY_DDB_AUTO_CREATE: 'true',
+      GDNOTIFY_S3_BUCKET: must_env('TF_VAR_gdnotify_s3_bucket_name'),
+      GDNOTIFY_S3_COPY_CONFIG: 's3copy.yaml',
       TZ: 'Asia/Tokyo',
     },
   },

@@ -22,6 +22,7 @@ import (
 	"github.com/fujiwara/ridge"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/mashiike/gdnotify/pkg/gdnotifyevent"
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
@@ -51,6 +52,7 @@ type App struct {
 	drivesFetchedAt    time.Time
 	drivesMu           sync.Mutex
 	webhookAddressMu   sync.Mutex
+	s3Copier           *S3Copier
 }
 
 var awsCfg *aws.Config
@@ -138,6 +140,13 @@ func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...o
 	}
 	app.setupRoute()
 	return app, nil
+}
+
+// SetS3Copier sets the S3Copier for copying files to S3.
+// If set, files matching the S3CopyConfig rules will be copied to S3
+// before sending notifications.
+func (app *App) SetS3Copier(copier *S3Copier) {
+	app.s3Copier = copier
 }
 
 func (app *App) Close() error {
@@ -691,5 +700,17 @@ func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes
 		}
 	}
 	details := Map(filtered, ConvertToDetail)
+	if app.s3Copier != nil {
+		for _, detail := range details {
+			if result := app.s3Copier.Copy(ctx, detail); result != nil {
+				detail.S3Copy = &gdnotifyevent.S3Copy{
+					S3URI:       result.S3URI,
+					ContentType: result.ContentType,
+					Size:        result.Size,
+					CopiedAt:    result.CopiedAt,
+				}
+			}
+		}
+	}
 	return app.notification.SendChanges(ctx, item, details)
 }

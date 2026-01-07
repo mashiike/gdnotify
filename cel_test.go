@@ -182,6 +182,54 @@ func TestExprOrString(t *testing.T) {
 	}
 }
 
+func TestCELEnv_EnvFunction(t *testing.T) {
+	t.Setenv("TEST_BUCKET_NAME", "my-test-bucket")
+
+	env, err := gdnotify.NewCELEnv()
+	require.NoError(t, err)
+
+	cases := []struct {
+		name     string
+		yaml     string
+		detail   *gdnotifyevent.Detail
+		expected string
+	}{
+		{
+			name:     "env function",
+			yaml:     `env("TEST_BUCKET_NAME")`,
+			detail:   &gdnotifyevent.Detail{},
+			expected: "my-test-bucket",
+		},
+		{
+			name:     "env function with concatenation",
+			yaml:     `env("TEST_BUCKET_NAME") + "/" + entity.name`,
+			detail:   &gdnotifyevent.Detail{Entity: &gdnotifyevent.Entity{Name: "file.txt"}},
+			expected: "my-test-bucket/file.txt",
+		},
+		{
+			name:     "env function missing var returns empty",
+			yaml:     `env("NONEXISTENT_VAR")`,
+			detail:   &gdnotifyevent.Detail{},
+			expected: "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var ev gdnotify.ExprOrString
+			err := ev.UnmarshalYAML([]byte(c.yaml))
+			require.NoError(t, err, "unmarshal")
+
+			err = ev.Bind(env)
+			require.NoError(t, err, "bind")
+
+			result, err := ev.Eval(env, c.detail)
+			require.NoError(t, err, "eval")
+			require.Equal(t, c.expected, result)
+		})
+	}
+}
+
 func TestExprOrBool(t *testing.T) {
 	env, err := gdnotify.NewCELEnv()
 	require.NoError(t, err)

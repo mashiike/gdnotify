@@ -4,10 +4,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/ext"
 	"github.com/mashiike/gdnotify/pkg/gdnotifyevent"
 )
@@ -42,6 +45,19 @@ func NewCELEnv() (*CELEnv, error) {
 		cel.Variable("actor", cel.ObjectType("gdnotifyevent.User")),
 		cel.Variable("change", cel.ObjectType("gdnotifyevent.Change")),
 		ext.Strings(),
+		cel.Function("env",
+			cel.Overload("env_string",
+				[]*cel.Type{cel.StringType},
+				cel.StringType,
+				cel.UnaryBinding(func(arg ref.Val) ref.Val {
+					name, ok := arg.Value().(string)
+					if !ok {
+						return types.NewErr("env() requires a string argument")
+					}
+					return types.String(os.Getenv(name))
+				}),
+			),
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)

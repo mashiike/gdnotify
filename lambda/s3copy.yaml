@@ -1,0 +1,17 @@
+bucket_name: env("GDNOTIFY_S3_BUCKET")
+object_key: '"files/" + entity.id + "/" + entity.name'
+
+rules:
+  # Google Slides -> PDF
+  - when: change.file.mimeType == "application/vnd.google-apps.presentation"
+    export: pdf
+    object_key: '"slides/" + entity.id + "/" + entity.name + ".pdf"'
+
+  # Google Sheets -> CSV
+  - when: change.file.mimeType == "application/vnd.google-apps.spreadsheet"
+    export: csv
+    object_key: '"sheets/" + entity.id + "/" + entity.name + ".csv"'
+
+  # Images -> download as-is
+  - when: change.file.mimeType.startsWith("image/")
+    object_key: '"images/" + entity.id + "/" + entity.name'

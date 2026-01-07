@@ -174,7 +174,35 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
-	return New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
+	app, err := New(c.AppOption, storage, notification, gcreds4aws.WithCredentials(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if c.S3CopyConfig != "" {
+		if err := c.setupS3Copier(ctx, app); err != nil {
+			return nil, fmt.Errorf("setup S3 copier: %w", err)
+		}
+	}
+	return app, nil
+}
+
+func (c *CLI) setupS3Copier(ctx context.Context, app *App) error {
+	env, err := NewCELEnv()
+	if err != nil {
+		return fmt.Errorf("create CEL environment: %w", err)
+	}
+	cfg, err := LoadS3CopyConfig(c.S3CopyConfig, env)
+	if err != nil {
+		return fmt.Errorf("load S3 copy config: %w", err)
+	}
+	awsCfg, err := loadAWSConfig()
+	if err != nil {
+		return fmt.Errorf("load AWS config: %w", err)
+	}
+	copier := NewS3Copier(cfg, env, app.driveSvc, awsCfg)
+	app.SetS3Copier(copier)
+	slog.InfoContext(ctx, "S3 copy enabled", "config", c.S3CopyConfig, "rules", len(cfg.Rules))
+	return nil
 }
 
 func newLogger(level slog.Level, format string, c bool) *slog.Logger {

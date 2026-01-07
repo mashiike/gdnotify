@@ -175,3 +175,36 @@ resource "aws_scheduler_schedule" "scheduler" {
     role_arn = aws_iam_role.scheduler.arn
   }
 }
+
+// S3 bucket for gdnotify file copies
+
+resource "aws_s3_bucket" "gdnotify" {
+  bucket = var.gdnotify_s3_bucket_name
+}
+
+resource "aws_s3_bucket_public_access_block" "gdnotify" {
+  bucket = aws_s3_bucket.gdnotify.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_iam_role_policy" "s3_copy" {
+  name = "gdnotify-s3-copy"
+  role = aws_iam_role.main.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+        ]
+        Effect   = "Allow"
+        Resource = "${aws_s3_bucket.gdnotify.arn}/*"
+      },
+    ]
+  })
+}
