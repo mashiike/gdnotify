@@ -14,13 +14,13 @@ import (
 )
 
 type CLI struct {
-	LogLevel      string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
-	LogFormat     string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
-	LogColor      bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
-	Version       kong.VersionFlag   `help:"show version"`
-	Storage       StorageOption      `embed:"" prefix:"storage-"`
+	LogLevel     string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
+	LogFormat    string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
+	LogColor     bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
+	Version      kong.VersionFlag   `help:"show version"`
+	Storage      StorageOption      `embed:"" prefix:"storage-"`
 	Notification NotificationOption `embed:"" prefix:"notification-"`
-	AppOption     `embed:""`
+	AppOption    `embed:""`
 
 	List    ListOption    `cmd:"" help:"list notification channels"`
 	Serve   ServeOption   `cmd:"" help:"serve webhook server" default:"true"`
