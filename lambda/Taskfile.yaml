@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  GDNOTIFY_VERSION: 0.5.4
+  GDNOTIFY_VERSION: 0.6.0
 
 tasks:
   download:
@@ -13,8 +13,8 @@ tasks:
       - mkdir -p tmp/
       - |
         cd tmp/ && \
-        wget -q https://github.com/mashiike/gdnotify/releases/download/v{{.GDNOTIFY_VERSION}}/gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz && \
-        tar xvf gdnotify_{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz
+        wget -q https://github.com/mashiike/gdnotify/releases/download/v{{.GDNOTIFY_VERSION}}/gdnotify_v{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz && \
+        tar xvf gdnotify_v{{.GDNOTIFY_VERSION}}_linux_arm64.tar.gz
       - install -m 755 tmp/gdnotify bootstrap
   build:
     desc: Build the binary.
