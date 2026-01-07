@@ -183,7 +183,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 		exitsDrive[drive.Id] = false
 	}
 	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
+	table.Header("Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At")
 	for items := range itemsCh {
 		for _, item := range items {
 			exitsDrive[item.DriveID] = true
@@ -191,7 +191,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 			if !ok {
 				driveName = "-"
 			}
-			table.Append([]string{
+			if err := table.Append([]string{
 				item.ChannelID,
 				item.DriveID,
 				driveName,
@@ -201,14 +201,16 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 				item.PageTokenFetchedAt.Format(time.RFC3339),
 				item.CreatedAt.Format(time.RFC3339),
 				item.UpdatedAt.Format(time.RFC3339),
-			})
+			}); err != nil {
+				return fmt.Errorf("append table row: %w", err)
+			}
 		}
 	}
 	for driveID, exists := range exitsDrive {
 		if exists {
 			continue
 		}
-		table.Append([]string{
+		if err := table.Append([]string{
 			"-",
 			driveID,
 			driveNameByID[driveID],
@@ -218,9 +220,13 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 			"-",
 			"-",
 			"-",
-		})
+		}); err != nil {
+			return fmt.Errorf("append table row: %w", err)
+		}
 	}
-	table.Render()
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("render table: %w", err)
+	}
 	return nil
 }
 
