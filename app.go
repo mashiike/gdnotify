@@ -664,29 +664,32 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 
 func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	slog.DebugContext(ctx, "send notification for channel", "channel_id", item.ChannelID)
+	var filtered []*drive.Change
 	if app.withinModifiedTime == nil {
 		slog.DebugContext(ctx, "no filter send", "channel_id", item.ChannelID)
-		return app.notification.SendChanges(ctx, item, changes)
-	}
-	slog.DebugContext(ctx, "try filter", "channel_id", item.ChannelID)
-	now := time.Now()
-	filtered := make([]*drive.Change, 0, len(changes))
-	for _, change := range changes {
-		if change.File == nil {
+		filtered = changes
+	} else {
+		slog.DebugContext(ctx, "try filter", "channel_id", item.ChannelID)
+		now := time.Now()
+		filtered = make([]*drive.Change, 0, len(changes))
+		for _, change := range changes {
+			if change.File == nil {
+				filtered = append(filtered, change)
+				continue
+			}
+			slog.DebugContext(ctx, "try check modified time", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
+			t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
+			if err != nil {
+				filtered = append(filtered, change)
+				continue
+			}
+			if now.Sub(t) > *app.withinModifiedTime {
+				slog.InfoContext(ctx, "filtered changes item", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
+				continue
+			}
 			filtered = append(filtered, change)
-			continue
 		}
-		slog.DebugContext(ctx, "try check modified time", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
-		t, err := time.Parse(time.RFC3339Nano, change.File.ModifiedTime)
-		if err != nil {
-			filtered = append(filtered, change)
-			continue
-		}
-		if now.Sub(t) > *app.withinModifiedTime {
-			slog.InfoContext(ctx, "filtered changes item", "file_id", change.File.Id, "modified_time", change.File.ModifiedTime)
-			continue
-		}
-		filtered = append(filtered, change)
 	}
-	return app.notification.SendChanges(ctx, item, filtered)
+	details := Map(filtered, ConvertToDetail)
+	return app.notification.SendChanges(ctx, item, details)
 }

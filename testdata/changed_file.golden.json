@@ -3,32 +3,29 @@
   "entity": {
     "id": "XXXXXXXXXX",
     "kind": "drive#file",
-    "name": "gdnotify",
-    "createdTime": ""
+    "name": "gdnotify"
   },
   "actor": {
-    "displayName": "hoge",
-    "emailAddress": "",
-    "kind": "drive#user"
+    "kind": "drive#user",
+    "displayName": "hoge"
   },
   "change": {
-    "changeType": "file",
-    "file": {
-      "id": "XXXXXXXXXX",
-      "kind": "drive#file",
-      "lastModifyingUser": {
-        "displayName": "hoge",
-        "emailAddress": "",
-        "kind": "drive#user"
-      },
-      "mimeType": "application/vnd.google-apps.spreadsheet",
-      "modifiedTime": "2022-06-15T00:03:45.843Z",
-      "name": "gdnotify",
-      "size": "1500",
-      "version": "20"
-    },
-    "fileId": "XXXXXXXXXX",
     "kind": "drive#change",
-    "time": "2022-06-15T00:03:55.849Z"
+    "changeType": "file",
+    "time": "2022-06-15T00:03:55.849Z",
+    "fileId": "XXXXXXXXXX",
+    "file": {
+      "kind": "drive#file",
+      "id": "XXXXXXXXXX",
+      "name": "gdnotify",
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "size": "1500",
+      "version": "20",
+      "modifiedTime": "2022-06-15T00:03:45.843Z",
+      "lastModifyingUser": {
+        "kind": "drive#user",
+        "displayName": "hoge"
+      }
+    }
   }
 }

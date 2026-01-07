@@ -2,9 +2,12 @@
   "subject": "",
   "entity": null,
   "actor": {
-    "displayName": "Unknown User",
-    "emailAddress": "",
-    "kind": "drive#user"
+    "kind": "drive#user",
+    "displayName": "Unknown User"
   },
-  "change": {}
+  "change": {
+    "kind": "",
+    "changeType": "",
+    "time": ""
+  }
 }
