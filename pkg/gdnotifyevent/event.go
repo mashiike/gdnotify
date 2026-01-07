@@ -24,72 +24,72 @@ type Event struct {
 
 // Detail is the event detail payload.
 type Detail struct {
-	Subject string  `json:"subject"`
-	Entity  *Entity `json:"entity"`
-	Actor   *User   `json:"actor"`
-	Change  *Change `json:"change"`
-	S3Copy  *S3Copy `json:"s3Copy,omitempty"`
+	Subject string  `json:"subject" cel:"subject"`
+	Entity  *Entity `json:"entity" cel:"entity"`
+	Actor   *User   `json:"actor" cel:"actor"`
+	Change  *Change `json:"change" cel:"change"`
+	S3Copy  *S3Copy `json:"s3Copy,omitempty" cel:"s3Copy"`
 }
 
 // Entity represents the file or drive that was changed.
 type Entity struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	Name        string `json:"name,omitempty"`
-	CreatedTime string `json:"createdTime,omitempty"`
+	ID          string `json:"id" cel:"id"`
+	Kind        string `json:"kind" cel:"kind"`
+	Name        string `json:"name,omitempty" cel:"name"`
+	CreatedTime string `json:"createdTime,omitempty" cel:"createdTime"`
 }
 
 // User represents a Google Drive user.
 type User struct {
-	Kind         string `json:"kind"`
-	DisplayName  string `json:"displayName"`
-	EmailAddress string `json:"emailAddress,omitempty"`
-	PhotoLink    string `json:"photoLink,omitempty"`
-	Me           bool   `json:"me,omitempty"`
-	PermissionID string `json:"permissionId,omitempty"`
+	Kind         string `json:"kind" cel:"kind"`
+	DisplayName  string `json:"displayName" cel:"displayName"`
+	EmailAddress string `json:"emailAddress,omitempty" cel:"emailAddress"`
+	PhotoLink    string `json:"photoLink,omitempty" cel:"photoLink"`
+	Me           bool   `json:"me,omitempty" cel:"me"`
+	PermissionID string `json:"permissionId,omitempty" cel:"permissionId"`
 }
 
 // Change represents a change to a file or shared drive.
 type Change struct {
-	Kind       string `json:"kind"`
-	ChangeType string `json:"changeType"`
-	Time       string `json:"time"`
-	Removed    bool   `json:"removed,omitempty"`
-	FileID     string `json:"fileId,omitempty"`
-	File       *File  `json:"file,omitempty"`
-	DriveID    string `json:"driveId,omitempty"`
-	Drive      *Drive `json:"drive,omitempty"`
+	Kind       string `json:"kind" cel:"kind"`
+	ChangeType string `json:"changeType" cel:"changeType"`
+	Time       string `json:"time" cel:"time"`
+	Removed    bool   `json:"removed,omitempty" cel:"removed"`
+	FileID     string `json:"fileId,omitempty" cel:"fileId"`
+	File       *File  `json:"file,omitempty" cel:"file"`
+	DriveID    string `json:"driveId,omitempty" cel:"driveId"`
+	Drive      *Drive `json:"drive,omitempty" cel:"drive"`
 }
 
 // File represents a Google Drive file.
 type File struct {
-	Kind              string   `json:"kind"`
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	MimeType          string   `json:"mimeType"`
-	Size              string   `json:"size,omitempty"`
-	Version           string   `json:"version,omitempty"`
-	CreatedTime       string   `json:"createdTime,omitempty"`
-	ModifiedTime      string   `json:"modifiedTime,omitempty"`
-	TrashedTime       string   `json:"trashedTime,omitempty"`
-	Trashed           bool     `json:"trashed,omitempty"`
-	Parents           []string `json:"parents,omitempty"`
-	LastModifyingUser *User    `json:"lastModifyingUser,omitempty"`
-	TrashingUser      *User    `json:"trashingUser,omitempty"`
+	Kind              string   `json:"kind" cel:"kind"`
+	ID                string   `json:"id" cel:"id"`
+	Name              string   `json:"name" cel:"name"`
+	MimeType          string   `json:"mimeType" cel:"mimeType"`
+	Size              string   `json:"size,omitempty" cel:"size"`
+	Version           string   `json:"version,omitempty" cel:"version"`
+	CreatedTime       string   `json:"createdTime,omitempty" cel:"createdTime"`
+	ModifiedTime      string   `json:"modifiedTime,omitempty" cel:"modifiedTime"`
+	TrashedTime       string   `json:"trashedTime,omitempty" cel:"trashedTime"`
+	Trashed           bool     `json:"trashed,omitempty" cel:"trashed"`
+	Parents           []string `json:"parents,omitempty" cel:"parents"`
+	LastModifyingUser *User    `json:"lastModifyingUser,omitempty" cel:"lastModifyingUser"`
+	TrashingUser      *User    `json:"trashingUser,omitempty" cel:"trashingUser"`
 }
 
 // Drive represents a Google shared drive.
 type Drive struct {
-	Kind        string `json:"kind"`
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	CreatedTime string `json:"createdTime,omitempty"`
+	Kind        string `json:"kind" cel:"kind"`
+	ID          string `json:"id" cel:"id"`
+	Name        string `json:"name" cel:"name"`
+	CreatedTime string `json:"createdTime,omitempty" cel:"createdTime"`
 }
 
 // S3Copy contains information about a file copied to S3.
 type S3Copy struct {
-	S3URI       string    `json:"s3Uri"`
-	ContentType string    `json:"contentType"`
-	Size        int64     `json:"size"`
-	CopiedAt    time.Time `json:"copiedAt"`
+	S3URI       string    `json:"s3Uri" cel:"s3Uri"`
+	ContentType string    `json:"contentType" cel:"contentType"`
+	Size        int64     `json:"size" cel:"size"`
+	CopiedAt    time.Time `json:"copiedAt" cel:"copiedAt"`
 }
