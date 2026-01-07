@@ -15,3 +15,4 @@
 # vendor/
 
 tunnel.log
+.claude/settings.local.json

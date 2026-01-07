@@ -29,6 +29,14 @@ import (
 	"google.golang.org/api/option"
 )
 
+// App is the core application that manages Google Drive notification channels.
+// It coordinates between Storage for persistence and Notification for event delivery.
+//
+// App handles:
+//   - Creating and managing Google Drive push notification channels
+//   - Processing webhook callbacks from Google Drive
+//   - Fetching and forwarding change events
+//   - Automatic channel rotation before expiration
 type App struct {
 	storage            Storage
 	notification       Notification
@@ -62,16 +70,36 @@ var loadAWSConfig = sync.OnceValues(func() (aws.Config, error) {
 	return awsCfg, nil
 })
 
+// SetAWSConfig sets a custom AWS configuration for the application.
+// This is useful for testing or when running outside of AWS with custom credentials.
+// If not called, the default AWS configuration is loaded automatically.
 func SetAWSConfig(cfg aws.Config) {
 	awsCfg = &cfg
 }
 
+// AppOption contains configuration options for creating an App.
+//
+// Fields:
+//   - Webhook: The public URL where Google Drive will send push notifications
+//   - Expiration: How long a notification channel remains valid (default: 168h)
+//   - WithinModifiedTime: Optional filter to ignore changes older than this duration
 type AppOption struct {
 	Webhook            string         `help:"webhook address" default:"" env:"GDNOTIFY_WEBHOOK"`
 	Expiration         time.Duration  `help:"channel expiration" default:"168h" env:"GDNOTIFY_EXPIRATION"`
 	WithinModifiedTime *time.Duration `help:"within modified time, If the edit time is not within this time, notifications will not be sent." env:"GDNOTIFY_WITHIN_MODIFIED_TIME"`
 }
 
+// New creates a new App instance with the provided configuration.
+//
+// The storage parameter is used to persist channel state, and notification
+// is used to deliver change events. The gcpOpts are passed to the Google Drive
+// API client for authentication.
+//
+// Example:
+//
+//	storage, _ := NewStorage(ctx, storageOpt)
+//	notification, _ := NewNotification(ctx, notificationOpt)
+//	app, err := New(appOpt, storage, notification)
 func New(cfg AppOption, storage Storage, notification Notification, gcpOpts ...option.ClientOption) (*App, error) {
 	ctx := context.Background()
 	cleanupFns := make([]func() error, 0)
@@ -155,7 +183,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 		exitsDrive[drive.Id] = false
 	}
 	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At"})
+	table.Header("Channel ID", "Drive ID", "Drive Name", "Page Token", "Expiration", "Resource ID", "Start Page Token Fetched At", "Created At", "Updated At")
 	for items := range itemsCh {
 		for _, item := range items {
 			exitsDrive[item.DriveID] = true
@@ -163,7 +191,7 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 			if !ok {
 				driveName = "-"
 			}
-			table.Append([]string{
+			if err := table.Append([]string{
 				item.ChannelID,
 				item.DriveID,
 				driveName,
@@ -173,14 +201,16 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 				item.PageTokenFetchedAt.Format(time.RFC3339),
 				item.CreatedAt.Format(time.RFC3339),
 				item.UpdatedAt.Format(time.RFC3339),
-			})
+			}); err != nil {
+				return fmt.Errorf("append table row: %w", err)
+			}
 		}
 	}
 	for driveID, exists := range exitsDrive {
 		if exists {
 			continue
 		}
-		table.Append([]string{
+		if err := table.Append([]string{
 			"-",
 			driveID,
 			driveNameByID[driveID],
@@ -190,9 +220,13 @@ func (app *App) List(ctx context.Context, o ListOption) error {
 			"-",
 			"-",
 			"-",
-		})
+		}); err != nil {
+			return fmt.Errorf("append table row: %w", err)
+		}
 	}
-	table.Render()
+	if err := table.Render(); err != nil {
+		return fmt.Errorf("render table: %w", err)
+	}
 	return nil
 }
 
@@ -220,6 +254,8 @@ func (app *App) Sync(ctx context.Context, _ SyncOption) error {
 	return app.syncChannels(ctx)
 }
 
+// Constants for representing the user's personal "My Drive" and individual files.
+// These are used when no specific shared drive is targeted.
 const (
 	DefaultDriveID   = "__default__"
 	DefaultDriveName = "My Drive and Individual Files"

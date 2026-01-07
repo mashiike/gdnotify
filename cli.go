@@ -13,14 +13,27 @@ import (
 	"github.com/mashiike/slogutils"
 )
 
+// CLI is the command-line interface for gdnotify.
+//
+// Use the Run method to execute the CLI:
+//
+//	var cli gdnotify.CLI
+//	ctx := context.Background()
+//	exitCode := cli.Run(ctx)
+//
+// Available commands:
+//   - serve: Start the webhook server (default)
+//   - list: List registered notification channels
+//   - sync: Force synchronization of all channels
+//   - cleanup: Remove all notification channels
 type CLI struct {
-	LogLevel      string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
-	LogFormat     string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
-	LogColor      bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
-	Version       kong.VersionFlag   `help:"show version"`
-	Storage       StorageOption      `embed:"" prefix:"storage-"`
-	Nootification NotificationOption `embed:"" prefix:"notification-"`
-	AppOption     `embed:""`
+	LogLevel     string             `help:"log level" default:"info" env:"GDNOTIFY_LOG_LEVEL"`
+	LogFormat    string             `help:"log format" default:"text" enum:"text,json" env:"GDNOTIFY_LOG_FORMAT"`
+	LogColor     bool               `help:"enable color output" default:"true" env:"GDNOTIFY_LOG_COLOR" negatable:""`
+	Version      kong.VersionFlag   `help:"show version"`
+	Storage      StorageOption      `embed:"" prefix:"storage-"`
+	Notification NotificationOption `embed:"" prefix:"notification-"`
+	AppOption    `embed:""`
 
 	List    ListOption    `cmd:"" help:"list notification channels"`
 	Serve   ServeOption   `cmd:"" help:"serve webhook server" default:"true"`
@@ -28,20 +41,26 @@ type CLI struct {
 	Sync    SyncOption    `cmd:"" help:"force sync notification channels; re-register expired notification channels,register new unregistered channels and get all new notification"`
 }
 
+// ListOption contains options for the list command.
 type ListOption struct {
 	Output io.Writer `kong:"-"`
 }
 
+// ServeOption contains options for the serve command.
 type ServeOption struct {
 	Port int `help:"webhook httpd port" default:"25254" env:"GDNOTIFY_PORT"`
 }
 
+// SyncOption contains options for the sync command.
 type SyncOption struct {
 }
 
+// CleanupOption contains options for the cleanup command.
 type CleanupOption struct {
 }
 
+// Run parses command-line arguments and executes the appropriate command.
+// Returns 0 on success, 1 on error.
 func (c *CLI) Run(ctx context.Context) int {
 	k := kong.Parse(c,
 		kong.Name("gdnotify"),
@@ -66,7 +85,7 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 	var err error
 	cmd := k.Command()
 	if cmd == "version" {
-		fmt.Printf("estellm version %s\n", Version)
+		fmt.Printf("gdnotify version %s\n", Version)
 		return nil
 	}
 	app, err := c.newApp(ctx)
@@ -78,7 +97,7 @@ func (c *CLI) run(ctx context.Context, k *kong.Context) error {
 			slog.WarnContext(ctx, "app cleanup error", "details", err)
 		}
 		if err := gcreds4aws.Close(); err != nil {
-			slog.WarnContext(ctx, "gqreds cleanup error", "details", err)
+			slog.WarnContext(ctx, "gcreds cleanup error", "details", err)
 		}
 	}()
 	switch cmd {
@@ -100,7 +119,7 @@ func (c *CLI) newApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Storage: %w", err)
 	}
-	notification, err := NewNotification(ctx, c.Nootification)
+	notification, err := NewNotification(ctx, c.Notification)
 	if err != nil {
 		return nil, fmt.Errorf("create Notification: %w", err)
 	}
