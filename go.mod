@@ -21,7 +21,7 @@ require (
 	github.com/mashiike/slogutils v0.4.0
 	github.com/najeira/randstr v0.1.1
 	github.com/olekukonko/tablewriter v1.1.2
-	github.com/sebdah/goldie/v2 v2.5.3
+	github.com/sebdah/goldie/v2 v2.8.0
 	github.com/shogo82148/go-retry v1.3.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
