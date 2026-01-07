@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.6.1](https://github.com/mashiike/gdnotify/compare/v0.6.0...v0.6.1) - 2026-01-07
+- fix example lambda by @mashiike in https://github.com/mashiike/gdnotify/pull/265
+
 ## [v0.6.0](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.6.0) - 2026-01-07
 - docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
 - chore: repository maintenance by @mashiike in https://github.com/mashiike/gdnotify/pull/262
