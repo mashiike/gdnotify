@@ -2,6 +2,10 @@
 
 ## [v0.5.4](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.5.4) - 2026-01-07
 - docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
+- chore: repository maintenance by @mashiike in https://github.com/mashiike/gdnotify/pull/262
+
+## [v0.5.4](https://github.com/mashiike/gdnotify/compare/v0.5.3...v0.5.4) - 2026-01-07
+- docs: add AGENTS.md and ADR documentation by @mashiike in https://github.com/mashiike/gdnotify/pull/260
 
 ## [v0.5.3](https://github.com/mashiike/gdnotify/compare/v0.5.2...v0.5.3) - 2025-03-17
 - add UpdateItem by @mashiike in https://github.com/mashiike/gdnotify/pull/211
