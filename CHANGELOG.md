@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.6.1](https://github.com/mashiike/gdnotify/compare/v0.6.0...v0.6.1) - 2026-01-08
+- fix example lambda by @mashiike in https://github.com/mashiike/gdnotify/pull/265
+
 ## [v0.6.1](https://github.com/mashiike/gdnotify/compare/v0.6.0...v0.6.1) - 2026-01-07
 - fix example lambda by @mashiike in https://github.com/mashiike/gdnotify/pull/265
 
