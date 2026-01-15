@@ -716,7 +716,6 @@ func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes
 		}
 	}
 	details := Map(filtered, ConvertToDetail)
-	// Populate Parent field for each detail
 	for _, detail := range details {
 		if detail.Change != nil && detail.Change.File != nil && len(detail.Change.File.Parents) > 0 {
 			detail.Change.File.Parent = app.fetchParentFolder(ctx, detail.Change.File.Parents[0])
