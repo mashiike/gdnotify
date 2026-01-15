@@ -605,7 +605,7 @@ var driveFields = fmt.Sprintf("drive(%s)", strings.Join(
 	",",
 ))
 var fileFields = fmt.Sprintf("file(%s)", strings.Join(
-	[]string{"id", "name", "driveId", "kind", "mimeType", "modifiedTime", "lastModifyingUser", "trashed", "trashedTime", "trashingUser", "version", "size", "md5Checksum", "createdTime"},
+	[]string{"id", "name", "driveId", "kind", "mimeType", "modifiedTime", "lastModifyingUser", "trashed", "trashedTime", "trashingUser", "version", "size", "md5Checksum", "createdTime", "parents"},
 	",",
 ))
 var changesFields = fmt.Sprintf("changes(%s)", strings.Join(
@@ -671,6 +671,22 @@ func (app *App) changesList(ctx context.Context, item *ChannelItem) ([]*drive.Ch
 	return changes, &newItem, nil
 }
 
+// fetchParentFolder fetches parent folder information from Google Drive API.
+func (app *App) fetchParentFolder(ctx context.Context, parentID string) *gdnotifyevent.Folder {
+	folder := &gdnotifyevent.Folder{ID: parentID}
+	file, err := app.driveSvc.Files.Get(parentID).
+		Fields("id,name").
+		SupportsAllDrives(true).
+		Context(ctx).
+		Do()
+	if err != nil {
+		slog.WarnContext(ctx, "failed to fetch parent folder", "id", parentID, "error", err)
+	} else {
+		folder.Name = file.Name
+	}
+	return folder
+}
+
 func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes []*drive.Change) error {
 	slog.DebugContext(ctx, "send notification for channel", "channel_id", item.ChannelID)
 	var filtered []*drive.Change
@@ -700,6 +716,11 @@ func (app *App) SendNotification(ctx context.Context, item *ChannelItem, changes
 		}
 	}
 	details := Map(filtered, ConvertToDetail)
+	for _, detail := range details {
+		if detail.Change != nil && detail.Change.File != nil && len(detail.Change.File.Parents) > 0 {
+			detail.Change.File.Parent = app.fetchParentFolder(ctx, detail.Change.File.Parents[0])
+		}
+	}
 	if app.s3Copier != nil {
 		for _, detail := range details {
 			if result := app.s3Copier.Copy(ctx, detail); result != nil {
