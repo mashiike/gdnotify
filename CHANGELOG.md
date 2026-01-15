@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.7.0](https://github.com/mashiike/gdnotify/compare/v0.6.1...v0.7.0) - 2026-01-15
+- feat(event): add Parent field with folder name resolution by @mashiike in https://github.com/mashiike/gdnotify/pull/274
+- Bump Songmu/tagpr from 1.10.0 to 1.11.1 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/272
+- Bump the aws-sdk-go-v2 group with 5 updates by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/268
+- Bump actions/setup-go from 5.6.0 to 6.1.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/271
+- Bump github.com/aws/aws-lambda-go from 1.51.1 to 1.51.2 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/270
+- Bump github.com/goccy/go-yaml from 1.19.1 to 1.19.2 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/269
+
 ## [v0.6.1](https://github.com/mashiike/gdnotify/compare/v0.6.0...v0.6.1) - 2026-01-08
 - fix example lambda by @mashiike in https://github.com/mashiike/gdnotify/pull/265
 
