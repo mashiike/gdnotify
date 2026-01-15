@@ -38,6 +38,7 @@ func NewCELEnv() (*CELEnv, error) {
 			reflect.TypeOf(&gdnotifyevent.Change{}),
 			reflect.TypeOf(&gdnotifyevent.File{}),
 			reflect.TypeOf(&gdnotifyevent.Drive{}),
+			reflect.TypeOf(&gdnotifyevent.Folder{}),
 		),
 		cel.Variable("detail", cel.ObjectType("gdnotifyevent.Detail")),
 		cel.Variable("subject", cel.StringType),

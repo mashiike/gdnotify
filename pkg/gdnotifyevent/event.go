@@ -74,6 +74,7 @@ type File struct {
 	TrashedTime       string   `json:"trashedTime,omitempty" cel:"trashedTime"`
 	Trashed           bool     `json:"trashed,omitempty" cel:"trashed"`
 	Parents           []string `json:"parents,omitempty" cel:"parents"`
+	Parent            *Folder  `json:"parent,omitempty" cel:"parent"`
 	LastModifyingUser *User    `json:"lastModifyingUser,omitempty" cel:"lastModifyingUser"`
 	TrashingUser      *User    `json:"trashingUser,omitempty" cel:"trashingUser"`
 }
@@ -84,6 +85,12 @@ type Drive struct {
 	ID          string `json:"id" cel:"id"`
 	Name        string `json:"name" cel:"name"`
 	CreatedTime string `json:"createdTime,omitempty" cel:"createdTime"`
+}
+
+// Folder represents a Google Drive folder.
+type Folder struct {
+	ID   string `json:"id" cel:"id"`
+	Name string `json:"name" cel:"name"`
 }
 
 // S3Copy contains information about a file copied to S3.
