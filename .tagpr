@@ -29,3 +29,5 @@
 	vPrefix = true
 	releaseBranch = main
 	versionFile = version.go,lambda/Taskfile.yaml
+    majorLabels = tagpr:major
+    minorLabels = tagpr:minor
