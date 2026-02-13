@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.7.1](https://github.com/mashiike/gdnotify/compare/v0.7.0...v0.7.1) - 2026-02-13
+- Bump reviewdog/action-actionlint from 1.69.1 to 1.70.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/288
+- Bump Songmu/tagpr from 1.11.1 to 1.15.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/287
+- Bump github.com/google/cel-go from 0.26.1 to 0.27.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/284
+- Bump the aws-sdk-go-v2 group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/286
+- Bump actions/setup-go from 6.1.0 to 6.2.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/279
+- Bump google.golang.org/api from 0.259.0 to 0.264.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/285
+- dependerbot add major and minor lables, chagne targetlabel for tagpr by @mashiike in https://github.com/mashiike/gdnotify/pull/290
+- Bump github.com/aws/aws-lambda-go from 1.51.2 to 1.52.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/278
+- Bump actions/checkout from 6.0.1 to 6.0.2 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/282
+- Bump github.com/olekukonko/tablewriter from 1.1.2 to 1.1.3 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/277
+
 ## [v0.7.0](https://github.com/mashiike/gdnotify/compare/v0.6.1...v0.7.0) - 2026-01-15
 - feat(event): add Parent field with folder name resolution by @mashiike in https://github.com/mashiike/gdnotify/pull/274
 - Bump Songmu/tagpr from 1.10.0 to 1.11.1 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/272
