@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.7.2](https://github.com/mashiike/gdnotify/compare/v0.7.1...v0.7.2) - 2026-02-19
+- chore(deps): bump Songmu/tagpr from 1.15.0 to 1.17.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/294
+
 ## [v0.7.1](https://github.com/mashiike/gdnotify/compare/v0.7.0...v0.7.1) - 2026-02-13
 - Bump reviewdog/action-actionlint from 1.69.1 to 1.70.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/288
 - Bump Songmu/tagpr from 1.11.1 to 1.15.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/287
