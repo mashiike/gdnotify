@@ -1,6 +1,6 @@
 module github.com/mashiike/gdnotify
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/Songmu/flextime v0.1.0
@@ -28,7 +28,7 @@ require (
 	github.com/shogo82148/go-retry v1.3.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
-	google.golang.org/api v0.266.0
+	google.golang.org/api v0.268.0
 )
 
 require (
