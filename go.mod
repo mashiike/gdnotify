@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.18
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
-	github.com/aws/smithy-go v1.24.0
+	github.com/aws/smithy-go v1.24.1
 	github.com/fatih/color v1.18.0
 	github.com/fujiwara/ridge v0.13.1
 	github.com/goccy/go-yaml v1.19.2
