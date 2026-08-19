@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.7.2](https://github.com/mashiike/gdnotify/compare/v0.7.1...v0.7.2) - 2026-08-19
+- chore(deps): bump Songmu/tagpr from 1.15.0 to 1.17.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/294
+- chore(deps): bump github.com/alecthomas/kong from 1.13.0 to 1.14.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/292
+- chore(deps): bump reviewdog/action-actionlint from 1.70.0 to 1.71.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/293
+- chore(deps): bump goreleaser/goreleaser-action from 6.4.0 to 7.0.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/299
+- chore(deps): bump the aws-sdk-go-v2 group across 1 directory with 6 updates by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/298
+- chore(deps): bump google.golang.org/api from 0.266.0 to 0.270.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/305
+- chore(deps): bump Songmu/tagpr from 1.17.0 to 1.17.1 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/302
+- chore(deps): bump actions/setup-go from 6.2.0 to 6.3.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/303
+- chore(deps): bump reviewdog/action-golangci-lint from 2.8.0 to 2.10.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/306
+- chore(deps): bump github.com/aws/smithy-go from 1.24.1 to 1.27.8 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/301
+- chore(deps): bump github.com/aws/aws-lambda-go from 1.52.0 to 1.54.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/304
+- chore(deps): bump go.opentelemetry.io/otel from 1.39.0 to 1.41.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/312
+- chore(deps): bump github.com/aws/aws-sdk-go-v2/service/lambda from 1.88.1 to 1.88.5 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/308
+- chore(deps): bump golang.org/x/net from 0.51.0 to 0.55.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/313
+- chore(deps): bump google.golang.org/grpc from 1.79.2 to 1.82.1 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/315
+- chore(deps): bump github.com/aws/aws-sdk-go-v2/service/s3 from 1.96.1 to 1.97.3 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/310
+- chore(deps): bump golang.org/x/crypto from 0.48.0 to 0.52.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/314
+- chore(deps): bump github.com/google/cel-go from 0.27.0 to 0.29.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/316
+
 ## [v0.7.1](https://github.com/mashiike/gdnotify/compare/v0.7.0...v0.7.1) - 2026-02-13
 - Bump reviewdog/action-actionlint from 1.69.1 to 1.70.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/288
 - Bump Songmu/tagpr from 1.11.1 to 1.15.0 by @dependabot[bot] in https://github.com/mashiike/gdnotify/pull/287
