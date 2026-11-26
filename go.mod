@@ -28,7 +28,7 @@ require (
 	github.com/shogo82148/go-retry v1.3.1
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sync v0.23.0
-	google.golang.org/api v0.295.0
+	google.golang.org/api v0.297.0
 )
 
 require (
