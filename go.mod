@@ -1,11 +1,11 @@
 module github.com/mashiike/gdnotify
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/Songmu/flextime v0.1.0
 	github.com/alecthomas/kong v1.16.1
-	github.com/aws/aws-lambda-go v1.54.0
+	github.com/aws/aws-lambda-go v1.55.0
 	github.com/aws/aws-sdk-go-v2 v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.4
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.68.0
